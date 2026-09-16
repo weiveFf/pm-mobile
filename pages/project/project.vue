@@ -1,5 +1,5 @@
 <template>
-  <view class="pm-page">
+  <view class="pm-page pj-page">
     <app-nav-bar title="项目列表" :show-back="false" />
 
     <view class="pm-filter">
@@ -50,29 +50,43 @@
       </view>
     </view>
 
-    <view class="pm-list">
-      <view
-        v-for="row in list"
-        :key="row.fid + '-' + row.fbillno"
-        class="card pressable"
-        @click="openDetail(row)"
-      >
-        <view class="top">
-          <text class="name">{{ row.fshortname || '-' }}</text>
-          <status-chip :text="row.hasFeedback ? '有反馈' : '暂无'" :tone="row.hasFeedback ? 'warn' : 'muted'" />
-        </view>
-        <text class="bill">{{ row.fbillno || '-' }}</text>
-        <view class="chips">
-          <text class="mini">{{ formatDateOnly(row.fDateORD) }}</text>
-          <text class="mini">{{ row.fSalerName || '业务—' }}</text>
-          <text class="mini">数量 {{ row.fTotalQty != null ? row.fTotalQty : '—' }}</text>
-        </view>
-        <text class="product">{{ row.materialName || '暂无产品信息' }}</text>
-        <view class="ops" @click.stop>
-          <view class="btn primary" @click="addFeedback(row)">提交反馈</view>
-          <view class="btn" @click="openDetail(row)">看看详情</view>
+    <view
+      ref="listRef"
+      class="pj-list"
+      @touchstart="touchStart"
+      @touchmove="touchMove"
+      @touchend="touchEnd"
+      @touchcancel="touchEnd"
+      @scroll="onListScroll"
+    >
+      <!-- 自定义下拉刷新指示器：直接在滚动容器顶部，展开时把卡片整体推下去 -->
+      <view class="pr" :class="{ anim: status !== 'pulling' }" :style="{ height: pullY + 'px' }">
+        <view class="pr-box" :style="{ opacity: pullY > 0 ? 1 : 0, transform: 'scale(' + (0.8 + progress * 0.3) + ')' }">
+          <view class="pr-spin" :class="{ on: status === 'refreshing' }">
+            <view class="pr-ring" />
+          </view>
+          <text class="pr-txt" :class="{ ok: status === 'done' }">{{ text }}</text>
         </view>
       </view>
+
+      <project-card
+        v-for="row in list"
+        :key="row.fid + '-' + row.fbillno"
+        :fshortname="row.fshortname"
+        :fbillno="row.fbillno"
+        :f-date-o-r-d="row.fDateORD"
+        :f-saler-name="row.fSalerName"
+        :f-merchandiser="row.fMerchandiser"
+        :material-name="row.materialName"
+        :f-total-qty="row.fTotalQty"
+        :fnumber="row.fnumber"
+        :f-install-type="row.fInstallType"
+        :f-check-type="row.fCheckType"
+        :has-feedback="row.hasFeedback"
+        @feedback="addFeedback(row)"
+        @feedback-list="openDetail(row)"
+        @click="openDetail(row)"
+      />
       <view v-if="!loading && !list.length" class="pm-empty">没有找到项目</view>
       <view class="pm-load-more">{{ loading ? '加载中' : finished ? '已经看完啦' : '' }}</view>
       <view class="pm-safe-bottom" />
@@ -82,10 +96,10 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { onShow, onLoad } from '@dcloudio/uni-app'
 import { ensureLoggedIn } from '@/utils/authGuard.js'
 import { getProductManageList } from '@/api/after-sales.js'
-import { formatDateOnly } from '@/utils/urgencyDisplay.js'
+import { usePullRefresh } from '@/composables/usePullRefresh.js'
 
 const list = ref([])
 const loading = ref(false)
@@ -94,6 +108,7 @@ const expanded = ref(false)
 const pageNum = ref(1)
 const pageSize = 20
 const total = ref(0)
+const listRef = ref(null)
 
 const query = reactive({
   fshortname: '',
@@ -162,10 +177,9 @@ async function fetchList(reset) {
     if (list.value.length >= total.value || rows.length < pageSize) finished.value = true
     else pageNum.value += 1
   } catch (e) {
-    uni.showToast({ title: (e && e.message) || '加载失败', icon: 'none' })
+    uni.showToast({ title: (e && (e.message || e.errMsg || String(e))) || '加载失败', icon: 'none' })
   } finally {
     loading.value = false
-    uni.stopPullDownRefresh()
   }
 }
 
@@ -185,6 +199,7 @@ function reset() {
   hasFeedbackIndex.value = 0
   installIndex.value = 0
   checkIndex.value = 0
+  expanded.value = false
   fetchList(true)
 }
 
@@ -216,92 +231,133 @@ onShow(() => {
   fetchList(true)
 })
 
-onPullDownRefresh(() => fetchList(true))
+onLoad(() => {
+  if (!ensureLoggedIn()) return
+  fetchList(true)
+})
 
-onReachBottom(() => fetchList(false))
+const { pullY, status, text, progress, touchStart, touchMove, touchEnd } = usePullRefresh(
+  async () => {
+    await fetchList(true)
+  },
+  {
+    // 列表是内层滚动容器，下拉刷新以 listRef.scrollTop 为准
+    getScrollTop: () => {
+      // #ifdef H5
+      return listRef.value ? listRef.value.scrollTop || 0 : 0
+      // #endif
+      // #ifndef H5
+      return 0
+      // #endif
+    }
+  }
+)
+
+function onListScroll(e) {
+  // #ifdef H5
+  const el = e.target
+  if (!el) return
+  const bottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  if (!finished.value && !loading.value && bottom < 80) {
+    fetchList(false)
+  }
+  // #endif
+}
 </script>
 
 <style lang="scss" scoped>
 @import '@/uni.scss';
 
+/* 页面固定：筛选框不滚动，仅列表滚动 */
+.pj-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 兜底：防止 --window-bottom 未定义导致 calc 失效 */
+  height: calc(100vh - var(--window-bottom, 0px));
+  overflow: hidden;
+  box-sizing: border-box;
+  overscroll-behavior-y: none;
+}
+
+.pj-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  padding: 16rpx 24rpx 0;
+  overscroll-behavior-y: contain;
+}
+.pj-list > * {
+  flex-shrink: 0;
+}
+.pj-list > .pm-empty {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
 .search-btn {
   background: $pm-primary !important;
   color: #fff !important;
 }
+
 .picker {
   line-height: 76rpx;
 }
-.card {
-  background: $pm-surface;
-  border-radius: $pm-radius;
-  padding: 28rpx;
-  margin-bottom: 20rpx;
-  box-shadow: $pm-shadow;
+
+/* —— 自定义下拉刷新 —— */
+.pr {
+  height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
-.top {
+.pr.anim {
+  transition: height 0.25s ease;
+}
+.pr-box {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 8rpx;
+  align-items: center;
+  padding-bottom: 16rpx;
 }
-.name {
-  flex: 1;
-  font-size: 32rpx;
-  font-weight: 800;
-  color: $pm-text;
-  letter-spacing: -0.4rpx;
-  padding-right: 12rpx;
-}
-.bill {
-  display: block;
-  font-size: 24rpx;
-  color: $pm-primary-deep;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  margin-bottom: 14rpx;
-}
-.chips {
+.pr-spin {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 12rpx;
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  margin-bottom: 12rpx;
+  align-items: center;
+  justify-content: center;
 }
-.mini {
-  margin-right: 10rpx;
-  margin-bottom: 8rpx;
-  padding: 6rpx 14rpx;
-  border-radius: 999rpx;
-  background: $pm-bg;
-  font-size: 20rpx;
-  color: $pm-text-secondary;
-  font-weight: 600;
+.pr-ring {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  border: 4rpx solid $pm-primary-soft;
+  border-top-color: $pm-primary;
+  box-sizing: border-box;
 }
-.product {
-  display: block;
+.pr-spin.on .pr-ring {
+  animation: pr-spin 0.7s linear infinite;
+}
+.pr-txt {
   font-size: 24rpx;
   color: $pm-muted;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 18rpx;
+  font-weight: 700;
 }
-.ops {
-  display: flex;
-  flex-direction: row;
-}
-.btn {
-  margin-right: 12rpx;
-  padding: 14rpx 28rpx;
-  border-radius: 999rpx;
-  background: $pm-accent;
+.pr-txt.ok {
   color: $pm-primary-deep;
-  font-size: 24rpx;
-  font-weight: 750;
 }
-.btn.primary {
-  background: $pm-primary;
-  color: #fff;
-  box-shadow: 0 8rpx 20rpx rgba(14, 95, 59, 0.28);
+
+@keyframes pr-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
+
 </style>

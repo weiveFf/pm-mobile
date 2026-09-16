@@ -1,6 +1,6 @@
 <template>
   <view class="pm-page">
-    <app-nav-bar title="项目详情" />
+    <app-nav-bar title="反馈列表" />
 
     <view v-if="project" class="hero">
       <view class="deco" />
@@ -35,7 +35,12 @@
         :handler="row.handler"
         @click="openDetail(row.id)"
       />
-      <view v-if="!loading && !list.length" class="pm-empty">还没有反馈，去提一条吧</view>
+        <view v-if="!loading && !list.length" class="empty-box">
+        <view class="empty-icon" />
+        <text class="empty-title">该项目暂无反馈</text>
+        <text class="empty-desc">有问题？及时提交反馈，让协作有迹可循</text>
+        <view class="empty-cta pressable" @click="addFeedback">提交反馈</view>
+      </view>
     </view>
   </view>
 </template>
@@ -196,5 +201,63 @@ onLoad((q) => {
   font-size: 24rpx;
   color: $pm-muted;
   font-weight: 700;
+}
+.empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10vh 48rpx 6vh;
+}
+.empty-icon {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: $pm-primary-soft;
+  margin-bottom: 24rpx;
+  position: relative;
+}
+.empty-icon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -55%);
+  width: 8rpx;
+  height: 44rpx;
+  border-radius: 4rpx;
+  background: $pm-primary;
+}
+.empty-icon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, 55%);
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: $pm-primary;
+}
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: $pm-text;
+  margin-bottom: 8rpx;
+}
+.empty-desc {
+  font-size: 24rpx;
+  color: $pm-muted;
+  text-align: center;
+  margin-bottom: 32rpx;
+  line-height: 1.5;
+}
+.empty-cta {
+  padding: 18rpx 48rpx;
+  border-radius: 999rpx;
+  background: $pm-primary;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 800;
+  box-shadow: 0 10rpx 24rpx rgba(14, 95, 59, 0.28);
 }
 </style>

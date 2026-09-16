@@ -150,7 +150,8 @@
     "custom": {
       "^app-nav-bar$": "@/components/app-nav-bar/app-nav-bar.vue",
       "^feedback-card$": "@/components/feedback-card/feedback-card.vue",
-      "^status-chip$": "@/components/status-chip/status-chip.vue"
+      "^status-chip$": "@/components/status-chip/status-chip.vue",
+      "^project-card$": "@/components/project-card/project-card.vue"
     }
   }
 }
