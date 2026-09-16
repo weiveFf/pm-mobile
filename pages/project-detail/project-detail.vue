@@ -29,6 +29,7 @@
         :abnormal-type="row.abnormalType"
         :problem-type="row.problemType"
         :urgency-label="row.urgencyLabel"
+        :urgency-tone="row.urgencyTone"
         :customer="row.customer"
         :demand-finish="row.demandFinish"
         :handler="row.handler"
@@ -44,7 +45,7 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getProductManageByFid, getProductFeedbackList } from '@/api/after-sales.js'
 import { resolveFeedbackWorkflowDisplay, formatHandlerPair } from '@/utils/feedbackWorkflow.js'
-import { getUrgencyLabel, formatDateOnly } from '@/utils/urgencyDisplay.js'
+import { getUrgencyLabel, getUrgencyTone, formatDateOnly } from '@/utils/urgencyDisplay.js'
 
 const fid = ref('')
 const fbillno = ref('')
@@ -63,6 +64,7 @@ function mapRow(item) {
     abnormalType: fb.abnormalType,
     problemType: fb.problemType,
     urgencyLabel: getUrgencyLabel(fb.urgencyLevel),
+    urgencyTone: getUrgencyTone(fb.urgencyLevel),
     customer: fb.customerName || fb.fshortname || '',
     demandFinish: formatDateOnly(fb.demandFinishTime),
     handler: formatHandlerPair(fb)

@@ -12,24 +12,21 @@
       "path": "pages/workbench/workbench",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "工作台",
-        "enablePullDownRefresh": true
+        "navigationBarTitleText": "工作台"
       }
     },
     {
       "path": "pages/project/project",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "项目列表",
-        "enablePullDownRefresh": true
+        "navigationBarTitleText": "项目列表"
       }
     },
     {
       "path": "pages/feedback/feedback",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "反馈列表",
-        "enablePullDownRefresh": true
+        "navigationBarTitleText": "反馈列表"
       }
     },
     {
@@ -106,8 +103,7 @@
       "path": "pages/stats/stats",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "数据统计",
-        "enablePullDownRefresh": true
+        "navigationBarTitleText": "数据统计"
       }
     }
   ],

@@ -157,12 +157,30 @@ export function isFeedbackProcessCompleted(processList) {
   return p.isCompleted === true || p.is_completed === true || !!(p.completedTime || p.completed_time)
 }
 
-/** 处理人显示：处理人/负责人 */
+/** 从导航用户对象里取显示名（后端返回 theFirstHandlerUser / interventionPersonnelUser） */
+function pickUserDisplayName(user) {
+  if (!user) return ''
+  return user.nickName || user.NickName || user.userName || user.UserName || ''
+}
+
+/** 处理人显示：处理人/负责人。
+ *  后端返回的是导航属性 theFirstHandlerUser / interventionPersonnelUser（与 PC 端一致），
+ *  不存在 theFirstHandlerNickName 这类扁平字段，取值必须走导航属性。 */
 export function formatHandlerPair(fb) {
   if (!fb) return '-'
-  const a = fb.theFirstHandlerNickName || fb.theFirstHandlerName || ''
-  const b = fb.interventionPersonnelNickName || fb.interventionPersonnelName || ''
-  if (a && b) return a + '/' + b
+  const a =
+    pickUserDisplayName(fb.theFirstHandlerUser) ||
+    pickUserDisplayName(fb.TheFirstHandlerUser) ||
+    fb.theFirstHandlerNickName ||
+    fb.theFirstHandlerName ||
+    ''
+  const b =
+    pickUserDisplayName(fb.interventionPersonnelUser) ||
+    pickUserDisplayName(fb.InterventionPersonnelUser) ||
+    fb.interventionPersonnelNickName ||
+    fb.interventionPersonnelName ||
+    ''
+  if (a && b && a !== b) return a + '/' + b
   return a || b || '-'
 }
 

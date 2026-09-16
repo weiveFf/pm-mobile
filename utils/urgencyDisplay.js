@@ -38,6 +38,31 @@ export function getUrgencyLabel(level) {
   return found ? stripUrgencyParenthetical(found.label) : '-'
 }
 
+/**
+ * 紧急程度分级色调：与 constants/afterSales.js 的 urgencyLevels 一一对应。
+ * critical/urgent 走危险色，high/medium 走暖色，normal 走信息色，low/minor 走中性色，
+ * 保证 7 档在卡片上都能被一眼区分。
+ */
+const URGENCY_TONE_BY_VALUE = {
+  '0': 'critical',
+  '1': 'urgent',
+  '2': 'high',
+  '3': 'medium',
+  '4': 'normal',
+  '5': 'low',
+  '6': 'minor'
+}
+
+/** 紧急程度色调 key，供卡片上色；无等级时返回空串（不渲染胶囊） */
+export function getUrgencyTone(level) {
+  if (level == null || level === '') return ''
+  if (looksLikeIsoDateTime(level)) return ''
+  const s = String(level).trim()
+  if (URGENCY_TONE_BY_VALUE[s]) return URGENCY_TONE_BY_VALUE[s]
+  const found = findUrgency(s)
+  return found ? URGENCY_TONE_BY_VALUE[found.value] || '' : ''
+}
+
 /** 仅日期字段 YYYY-MM-DD */
 export function formatDateOnly(val) {
   if (!val) return '-'

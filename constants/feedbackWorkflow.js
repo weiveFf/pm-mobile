@@ -40,7 +40,12 @@ export const FEEDBACK_STATUS_FILTER_OPTIONS = [
 
 export const WORKBENCH_TYPES = [
   { key: 'pending', label: '待处理' },
-  { key: 'current_projects', label: '进行中' },
-  { key: 'pending_close', label: '待关闭' },
-  { key: 'closed', label: '已关闭' }
+  { key: 'mine', label: '我的反馈' },
+  { key: 'overdue', label: '逾期反馈' }
+]
+
+/** 数据范围：部门维度 / 我的维度（右上角切换，影响各分类的统计口径） */
+export const WORKBENCH_SCOPES = [
+  { key: 'dept', label: '部门' },
+  { key: 'mine', label: '我的' }
 ]

@@ -82,15 +82,22 @@ page {
   font-size: 26rpx;
 }
 
+/* 空状态：淡绿圆底 + 勾选符号，明确表达"没有待办了"，
+   避免纯色渐变球被误认为图标未渲染 */
 .pm-empty::before {
-  content: '';
-  display: block;
-  width: 72rpx;
-  height: 72rpx;
-  margin: 0 auto 24rpx;
+  content: '✓';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88rpx;
+  height: 88rpx;
+  margin: 0 auto 20rpx;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #4C9A6F, #0E5F3B);
-  opacity: 0.9;
+  background: $pm-accent;
+  color: $pm-primary;
+  font-size: 40rpx;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .pm-safe-bottom {

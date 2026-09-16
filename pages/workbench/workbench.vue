@@ -1,6 +1,29 @@
 <template>
-  <view class="pm-page">
-    <app-nav-bar title="工作台" :show-back="false" right-text="统计" @right="goStats" />
+  <view
+    class="pm-page wb-page"
+    @touchstart="touchStart"
+    @touchmove="touchMove"
+    @touchend="touchEnd"
+    @touchcancel="touchEnd"
+  >
+    <!-- 自定义下拉刷新指示器：文档流内独立区块，展开时把内容整体推下去，不与内容重叠 -->
+    <view class="pr" :class="{ anim: status !== 'pulling' }" :style="{ height: pullY + 'px' }">
+      <view class="pr-box">
+        <view v-if="status === 'done'" class="pr-done">✓</view>
+        <view
+          v-else
+          class="pr-spin"
+          :class="{ on: status === 'refreshing' }"
+          :style="{ transform: 'rotate(' + progress * 300 + 'deg)', opacity: 0.35 + progress * 0.65 }"
+        >
+          <view class="pr-ring" />
+        </view>
+        <text class="pr-txt" :class="{ ok: status === 'done' }">{{ text }}</text>
+      </view>
+    </view>
+
+    <view class="wb-body">
+      <app-nav-bar title="工作台" :show-back="false" right-text="统计" @right="goStats" />
 
     <!-- 问候栏(WB-01) -->
     <view class="gbar">
@@ -8,6 +31,18 @@
       <view class="gtxt">
         <text class="gdate">{{ dateLine }}</text>
         <text class="ghello">{{ greeting }},{{ userName || '工友' }}</text>
+      </view>
+      <!-- 数据范围切换：部门 / 我的 -->
+      <view class="scope-switch">
+        <view
+          v-for="s in scopes"
+          :key="s.key"
+          class="ss-item"
+          :class="{ on: scope === s.key }"
+          @click="setScope(s.key)"
+        >
+          {{ s.label }}
+        </view>
       </view>
     </view>
 
@@ -20,9 +55,8 @@
           <text class="hero-kicker">今日待办 · 待响应 {{ fmtNum(counts.pending) }}</text>
           <text class="hero-title">{{ total > 0 ? currentTypeLabel + ' 共 ' + total + ' 条' : '暂无待办,真棒' }}</text>
           <view class="hero-chips">
-            <text class="hchip">进行中 {{ fmtNum(counts.current_projects) }}</text>
-            <text class="hchip">待关闭 {{ fmtNum(counts.pending_close) }}</text>
-            <text class="hchip copper">已关闭 {{ fmtNum(counts.closed) }}</text>
+            <text class="hchip">我的反馈 {{ fmtNum(counts.mine) }}</text>
+            <text class="hchip copper">逾期 {{ fmtNum(counts.overdue) }}</text>
           </view>
         </view>
         <view class="ring" :style="{ background: ringBg }">
@@ -31,50 +65,46 @@
       </view>
     </view>
 
-    <!-- 快捷瓷贴(WB-01 · 森林协调系) -->
+    <!-- 快捷瓷贴(WB-01 · 森林协调系)
+         图标统一加 U+FE0E 文本变体符，防止系统把符号渲染成彩色 emoji 导致大小不一 -->
     <view class="quick">
       <view class="q pressable" @click="goTab('/pages/project/project')">
-        <view class="sq s1">✚</view>
+        <view class="sq s1 ico-plus">✚&#xFE0E;</view>
         <text class="qlb">提交反馈</text>
       </view>
       <view class="q pressable" @click="goTab('/pages/feedback/feedback')">
-        <view class="sq g1">✉</view>
+        <view class="sq g1 ico-check">☑&#xFE0E;</view>
         <text class="qlb">反馈处理</text>
       </view>
       <view class="q pressable" @click="goStats">
-        <view class="sq s3">◔</view>
+        <view class="sq s3 ico-chart">▤&#xFE0E;</view>
         <text class="qlb">数据看板</text>
       </view>
       <view class="q pressable" @click="goTab('/pages/mine/mine')">
-        <view class="sq s2">☺</view>
+        <view class="sq s2 ico-user">☺&#xFE0E;</view>
         <text class="qlb">个人中心</text>
       </view>
     </view>
 
-    <!-- 分类计数 -->
-    <scroll-view scroll-x class="seg-scroll" :show-scrollbar="false">
-      <view class="seg">
-        <view
-          v-for="item in typeTabs"
-          :key="item.key"
-          class="seg-item pressable"
-          :class="{ active: workbenchType === item.key }"
-          @click="switchType(item.key)"
-        >
-          <text class="seg-num">{{ counts[item.key] != null ? counts[item.key] : '–' }}</text>
-          <text class="seg-label">{{ item.label }}</text>
-        </view>
+    <!-- 分类计数：三个 tab 居中占满 -->
+    <view class="seg">
+      <view
+        v-for="item in typeTabs"
+        :key="item.key"
+        class="seg-item pressable"
+        :class="{ active: workbenchType === item.key }"
+        @click="switchType(item.key)"
+      >
+        <text class="seg-num">{{ counts[item.key] != null ? counts[item.key] : '–' }}</text>
+        <text class="seg-label">{{ item.label }}</text>
       </view>
-    </scroll-view>
+    </view>
 
     <view class="toolbar">
       <text class="toolbar-title">{{ currentTypeLabel }}</text>
-      <text v-if="workbenchType === 'pending_close'" class="toolbar-action" @click="onRemind">
-        {{ reminding ? '…' : '提醒关闭' }}
-      </text>
     </view>
 
-    <view class="pm-list">
+    <view class="pm-list" ref="listRef">
       <feedback-card
         v-for="row in list"
         :key="row.id"
@@ -86,36 +116,58 @@
         :urgency-label="row.urgencyLabel"
         :urgency-tone="row.urgencyTone"
         :customer="row.customer"
+        :product-name="row.productName"
         :demand-finish="row.demandFinish"
         :handler="row.handler"
+        :dept-name="row.deptName"
+        :creator-name="row.creatorName"
+        :overdue-days="row.overdueDays"
         :actions="row.actions"
         @click="openDetail(row.id)"
         @action="(k) => onAction(k, row)"
       />
-      <view v-if="!loading && !list.length" class="pm-empty">这一栏空空的</view>
+      <view v-if="!loading && !list.length" class="pm-empty">{{ emptyText }}</view>
       <view class="pm-load-more">{{ loading ? '加载中' : finished ? '已经看完啦' : '' }}</view>
       <view class="pm-safe-bottom" />
     </view>
   </view>
+</view>
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
-import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { usePullRefresh } from '@/composables/usePullRefresh.js'
 import { ensureLoggedIn } from '@/utils/authGuard.js'
 import { getUserId, getUserName } from '@/utils/auth.js'
 import {
   getWorkbenchFeedbackPage,
   getUserWorkloadStatistics,
-  remindPendingCloseFeedback,
   markProcessResponded
 } from '@/api/after-sales.js'
-import { WORKBENCH_TYPES } from '@/constants/feedbackWorkflow.js'
+import { WORKBENCH_TYPES, WORKBENCH_SCOPES } from '@/constants/feedbackWorkflow.js'
 import { resolveFeedbackWorkflowDisplay, formatHandlerPair, canRespondFeedbackRow } from '@/utils/feedbackWorkflow.js'
-import { getUrgencyLabel, formatDateOnly } from '@/utils/urgencyDisplay.js'
+import { getUrgencyLabel, getUrgencyTone, formatDateOnly } from '@/utils/urgencyDisplay.js'
 
 const typeTabs = WORKBENCH_TYPES
+const scopes = WORKBENCH_SCOPES
 const workbenchType = ref('pending')
+// 数据范围：dept 部门维度 / mine 我的维度
+const scope = ref('mine')
+
+function setScope(key) {
+  if (scope.value === key) return
+  scope.value = key
+  loadStats()
+  fetchList(true)
+}
+const emptyTextMap = {
+  pending: '暂无待处理事项',
+  mine: '暂无我的反馈',
+  overdue: '没有逾期的反馈,继续保持'
+}
+const emptyText = computed(() => emptyTextMap[workbenchType.value] || '暂无数据')
+
 const currentTypeLabel = computed(() => {
   const hit = typeTabs.find((t) => t.key === workbenchType.value)
   return hit ? hit.label : '事项'
@@ -126,14 +178,17 @@ const pageSize = 20
 const total = ref(0)
 const loading = ref(false)
 const finished = ref(false)
-const reminding = ref(false)
+// 反馈列表的 DOM 引用：页面不再整体滚动，只有列表滚动，
+// 下拉刷新需要根据列表容器的 scrollTop 判断是否在顶部
+const listRef = ref(null)
 const userName = ref('')
 const counts = reactive({
   pending: null,
-  current_projects: null,
-  pending_close: null,
-  closed: null
+  mine: null,
+  overdue: null
 })
+// 进度环数据：我的处理完成度
+const processStats = reactive({ total: null, done: null })
 
 const avatarLetter = computed(() => {
   const n = (userName.value || 'Y').trim()
@@ -155,12 +210,11 @@ const dateLine = computed(() => {
   return '周' + weeks[d.getDay()] + ' · ' + (d.getMonth() + 1) + '月' + d.getDate() + '日'
 })
 
-/** 完成率进度环:已关闭 / 全部 */
+/** 完成率进度环：我的处理完成度（已处理 / 全部处理记录），由 loadStats 写入 */
 const ringPct = computed(() => {
-  const c = counts
-  const sum = num(c.pending) + num(c.current_projects) + num(c.pending_close) + num(c.closed)
-  if (!sum) return 0
-  return Math.round((num(c.closed) / sum) * 100)
+  const t = num(processStats.total)
+  if (!t) return 0
+  return Math.round((num(processStats.done) / t) * 100)
 })
 const ringBg = computed(() => 'conic-gradient(#3D805E ' + ringPct.value + '%, #EDE9DF 0)')
 
@@ -175,30 +229,50 @@ function fmtNum(v) {
 
 function mapRow(item) {
   const fb = item.feedback || item
+  const project = item.project || {}
   const display = resolveFeedbackWorkflowDisplay(item)
   const overdue = !!display.overdueType
+  const uid = String(getUserId())
+
+  // 操作权限：仅当当前用户是处理人或负责人才显示处理/响应
+  const firstId = String(fb.theFirstHandlerId || fb.TheFirstHandlerId || '')
+  const ivId = String(fb.interventionPersonnelId || fb.InterventionPersonnelId || '')
+  const isHandler = firstId && firstId === uid
+  const isResponsible = ivId && ivId === uid
+  const canOperate = isHandler || isResponsible
+
   const actions = []
-  if (canRespondFeedbackRow(item, getUserId())) {
+  if (canOperate && canRespondFeedbackRow(item, uid)) {
     actions.push({ key: 'respond', label: '响应' })
   }
-  if (!fb.isClose && !fb.isWithdrawn) {
+  if (canOperate && !fb.isClose && !fb.isWithdrawn) {
     actions.push({ key: 'process', label: '处理' })
   }
   if (display.status === 'pending_close') {
     actions.push({ key: 'close', label: '关闭' })
   }
+  const serial = String(fb.serialNumber || fb.id || '').replace(/^#/, '')
   return {
     id: fb.id,
-    serial: fb.serialNumber || fb.id,
+    serial,
     statusLabel: display.label,
     statusTone: overdue ? 'danger' : display.status === 'pending_response' ? 'warn' : '',
     abnormalType: fb.abnormalType,
     problemType: fb.problemType,
     urgencyLabel: getUrgencyLabel(fb.urgencyLevel),
-    urgencyTone: fb.urgencyLevel === '0' ? 'copper' : '',
-    customer: fb.customerName || fb.fshortname || '',
+    urgencyTone: getUrgencyTone(fb.urgencyLevel),
+    customer: project.fshortname || project.FSHORTNAME || fb.customerName || fb.fshortname || '',
+    productName:
+      project.materialName ||
+      project.MaterialName ||
+      (fb.afterSalesExt && fb.afterSalesExt.productName) ||
+      (fb.AfterSalesExt && fb.AfterSalesExt.ProductName) ||
+      '',
     demandFinish: formatDateOnly(fb.demandFinishTime),
     handler: formatHandlerPair(fb),
+    deptName: fb.deptName || fb.DeptName || '',
+    creatorName: fb.createByNickName || fb.CreateByNickName || '',
+    overdueDays: item.overdueDays || 0,
     actions,
     raw: item
   }
@@ -207,12 +281,17 @@ function mapRow(item) {
 async function loadStats() {
   try {
     const uid = getUserId()
-    const res = await getUserWorkloadStatistics({ userId: uid })
+    const res = await getUserWorkloadStatistics({ userId: uid, scope: scope.value })
     const d = res.data || {}
     counts.pending = d.pendingCount != null ? d.pendingCount : d.pending
-    counts.current_projects = d.currentProjectsCount != null ? d.currentProjectsCount : d.processing
-    counts.pending_close = d.pendingCloseCount != null ? d.pendingCloseCount : d.pendingClose
-    counts.closed = d.closedCount != null ? d.closedCount : d.closed
+    counts.mine = d.myFeedbackCount != null ? d.myFeedbackCount : null
+    // 逾期：我的口径用 MyOverdueCount，部门口径用 DeptOverdueCount
+    counts.overdue = scope.value === 'dept'
+      ? (d.deptOverdueCount != null ? d.deptOverdueCount : null)
+      : (d.myOverdueCount != null ? d.myOverdueCount : null)
+    // 进度环：我的处理完成度
+    processStats.total = d.totalProcessCount != null ? d.totalProcessCount : null
+    processStats.done = d.processedCount != null ? d.processedCount : null
   } catch (e) {}
 }
 
@@ -230,6 +309,7 @@ async function fetchList(reset) {
     const res = await getWorkbenchFeedbackPage({
       userId: getUserId(),
       workbenchType: workbenchType.value,
+      scope: scope.value,
       pageNum: pageNum.value,
       pageSize
     })
@@ -277,18 +357,6 @@ async function onAction(key, row) {
   }
 }
 
-async function onRemind() {
-  reminding.value = true
-  try {
-    const res = await remindPendingCloseFeedback()
-    uni.showToast({ title: (res && res.msg) || '已发送提醒', icon: 'none' })
-  } catch (e) {
-    uni.showToast({ title: (e && e.message) || '提醒失败', icon: 'none' })
-  } finally {
-    reminding.value = false
-  }
-}
-
 function goTab(url) {
   uni.switchTab({ url })
 }
@@ -304,16 +372,139 @@ onShow(() => {
   fetchList(true)
 })
 
-onPullDownRefresh(() => {
-  loadStats()
-  fetchList(true)
+function onListScroll() {
+  if (!listRef.value) return
+  const el = listRef.value
+  const bottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 80
+  if (bottom && !finished.value && !loading.value) {
+    fetchList(false)
+  }
+}
+
+onMounted(() => {
+  // #ifdef H5
+  if (listRef.value) listRef.value.addEventListener('scroll', onListScroll)
+  // #endif
 })
+
+onUnmounted(() => {
+  // #ifdef H5
+  if (listRef.value) listRef.value.removeEventListener('scroll', onListScroll)
+  // #endif
+})
+
+const { pullY, status, text, progress, touchStart, touchMove, touchEnd } = usePullRefresh(
+  async () => {
+    await loadStats()
+    await fetchList(true)
+  },
+  {
+    // 列表是内层滚动容器，下拉刷新以 listRef.scrollTop 为准，避免误判为"一直在顶部"
+    getScrollTop: () => {
+      // #ifdef H5
+      return listRef.value ? listRef.value.scrollTop || 0 : 0
+      // #endif
+      // #ifndef H5
+      return 0
+      // #endif
+    },
+    // 工作台卡片较多，滚动时容易误触下拉；增大阈值和死区，让下拉意图更明显
+    threshold: 88,
+    deadZone: 18,
+    damping: 0.5
+  }
+)
 
 onReachBottom(() => fetchList(false))
 </script>
 
 <style lang="scss" scoped>
 @import '@/uni.scss';
+
+/* —— 页面整体布局：整页固定，仅反馈列表可滚动 —— */
+.wb-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--window-bottom));
+  overflow: hidden;
+  box-sizing: border-box;
+  /* 防止列表滚到边界时把整页 rubber-band 拉起来 */
+  overscroll-behavior-y: none;
+}
+.wb-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* —— 自定义下拉刷新 —— */
+.pr {
+  /* 文档流内独立区块：height=0 时不占位，展开时把下方内容整体推下去 */
+  height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.pr.anim {
+  transition: height 0.25s ease;
+}
+.pr-box {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding-bottom: 16rpx;
+}
+.pr-spin {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pr-ring {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  border: 4rpx solid $pm-primary-soft;
+  border-top-color: $pm-primary;
+  box-sizing: border-box;
+}
+.pr-spin.on .pr-ring {
+  animation: pr-spin 0.7s linear infinite;
+}
+.pr-done {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 12rpx;
+  border-radius: 50%;
+  background: $pm-primary;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pr-txt {
+  font-size: 24rpx;
+  color: $pm-muted;
+  font-weight: 700;
+}
+.pr-txt.ok {
+  color: $pm-primary-deep;
+}
+@keyframes pr-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* —— 问候栏 —— */
 .gbar {
@@ -336,6 +527,36 @@ onReachBottom(() => fetchList(false))
   box-shadow: $pm-shadow;
   flex-shrink: 0;
 }
+
+/* 数据范围切换：部门 / 我的 */
+.scope-switch {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-left: 12rpx;
+  padding: 4rpx;
+  border-radius: 999rpx;
+  background: $pm-bg-2;
+  border: 1px solid $pm-line;
+}
+.ss-item {
+  min-width: 76rpx;
+  height: 48rpx;
+  line-height: 48rpx;
+  text-align: center;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: $pm-muted;
+  transition: all 0.18s $pm-press-ease;
+}
+.ss-item.on {
+  background: $pm-primary;
+  color: #fff;
+  box-shadow: 0 6rpx 14rpx rgba(14, 95, 59, 0.28);
+}
+
 .gtxt {
   flex: 1;
   min-width: 0;
@@ -481,6 +702,25 @@ onReachBottom(() => fetchList(false))
   justify-content: center;
   font-size: 32rpx;
   color: #fff;
+  /* 强制文本渲染，避免部分系统把符号替换成彩色 emoji */
+  font-variant-emoji: text;
+  font-family: $pm-font;
+  line-height: 1;
+}
+
+/* 各符号在不同字体下的实际字面大小不同，按视觉面积逐一校准，
+   以「提交反馈 ✚」为基准对齐 */
+.sq.ico-plus {
+  font-size: 36rpx;
+}
+.sq.ico-check {
+  font-size: 34rpx;
+}
+.sq.ico-chart {
+  font-size: 34rpx;
+}
+.sq.ico-user {
+  font-size: 32rpx;
 }
 .sq.g1 {
   background: $pm-grad-brand;
@@ -506,19 +746,14 @@ onReachBottom(() => fetchList(false))
   font-weight: 600;
 }
 
-/* —— 分类计数 —— */
-.seg-scroll {
-  width: 100%;
-  white-space: nowrap;
-  margin-top: 20rpx;
-}
+/* —— 分类计数（三 tab 居中占满） —— */
 .seg {
-  display: inline-flex;
+  display: flex;
   flex-direction: row;
-  padding: 8rpx 24rpx 8rpx;
+  padding: 8rpx 24rpx;
 }
 .seg-item {
-  width: 160rpx;
+  flex: 1;
   margin-right: 16rpx;
   padding: 24rpx 16rpx;
   border-radius: $pm-radius-lg;
@@ -526,6 +761,9 @@ onReachBottom(() => fetchList(false))
   border: 1px solid $pm-line;
   box-shadow: $pm-shadow;
   text-align: center;
+}
+.seg-item:last-child {
+  margin-right: 0;
 }
 .seg-item.active {
   background: $pm-primary;
@@ -569,5 +807,27 @@ onReachBottom(() => fetchList(false))
   padding: 8rpx 18rpx;
   background: $pm-warn-soft;
   border-radius: 999rpx;
+}
+
+/* —— 列表：唯一滚动区域 —— */
+.pm-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  display: flex;
+  flex-direction: column;
+}
+.pm-list > * {
+  flex-shrink: 0;
+}
+.pm-list > .pm-empty {
+  flex: 1 0 auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 </style>
