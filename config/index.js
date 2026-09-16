@@ -11,6 +11,8 @@ export default {
     token: 'yessys_pm_token',
     userId: 'yessys_pm_userId',
     userName: 'yessys_pm_userName',
+    /** 登录账号（后端 Create_by 存的是账号，昵称不可替代） */
+    account: 'yessys_pm_account',
     deptId: 'yessys_pm_deptId',
     baseURL: 'yessys_pm_baseURL',
     remember: 'yessys_pm_remember',

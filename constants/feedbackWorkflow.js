@@ -38,6 +38,33 @@ export const FEEDBACK_STATUS_FILTER_OPTIONS = [
   { label: '已撤回', value: FEEDBACK_WORKFLOW_STATUS.WITHDRAWN }
 ]
 
+/** 可通过接口 workflowStatus 直接筛选的状态（与 PC 端一致） */
+export const WORKFLOW_API_FILTER_STATUSES = new Set([
+  FEEDBACK_WORKFLOW_STATUS.COMPLAINT_PENDING_AUDIT,
+  FEEDBACK_WORKFLOW_STATUS.COMPLAINT_REJECTED,
+  FEEDBACK_WORKFLOW_STATUS.DELAY_PENDING_APPROVAL,
+  FEEDBACK_WORKFLOW_STATUS.PENDING_RESPONSE,
+  FEEDBACK_WORKFLOW_STATUS.PENDING_CLOSE,
+  FEEDBACK_WORKFLOW_STATUS.PROCESSING,
+  FEEDBACK_WORKFLOW_STATUS.COMPLETED,
+  FEEDBACK_WORKFLOW_STATUS.WITHDRAWN
+])
+
+/** 筛选这些状态时 isClose 置 undefined（不限定关闭态），与 PC 端一致 */
+export const WORKFLOW_FILTER_CLEAR_IS_CLOSE = new Set([
+  FEEDBACK_WORKFLOW_STATUS.WITHDRAWN,
+  FEEDBACK_WORKFLOW_STATUS.COMPLAINT_PENDING_AUDIT,
+  FEEDBACK_WORKFLOW_STATUS.COMPLAINT_REJECTED
+])
+
+/** 曾经状态筛选（对应 respondedOverdueOnly / processOverdueOnly） */
+export const FEEDBACK_HISTORY_STATUS_FILTER_OPTIONS = [
+  { label: '全部', value: 'all' },
+  { label: '响应超时', value: 'responded_overdue' },
+  { label: '处理逾期', value: 'process_overdue' },
+  { label: '超时并逾期', value: 'both_overdue' }
+]
+
 export const WORKBENCH_TYPES = [
   { key: 'pending', label: '待处理' },
   { key: 'mine', label: '我的反馈' },

@@ -24,6 +24,31 @@
   margin-bottom: 16rpx;
 }
 
+/* 一行两列：label + input 横向排列，用于异常类型/状态等短筛选 */
+.pm-filter-row.half {
+  justify-content: space-between;
+}
+.pm-filter-row.half .pm-filter-col {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+}
+.pm-filter-row.half .pm-filter-col + .pm-filter-col {
+  margin-left: 20rpx;
+}
+.pm-filter-row.half .pm-filter-label {
+  width: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-right: 12rpx;
+}
+.pm-filter-row.half .pm-filter-input {
+  flex: 1;
+  min-width: 0;
+}
+
 .pm-filter-label {
   width: 120rpx;
   font-size: 24rpx;

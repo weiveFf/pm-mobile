@@ -18,29 +18,31 @@
     <text class="title">{{ abnormalType || '-' }} · {{ problemType || '-' }}</text>
 
     <view class="meta-grid">
-      <view class="meta-cell">
-        <text class="meta-label">客户</text>
-        <text class="meta-value">{{ customer || '—' }}</text>
-      </view>
-      <view class="meta-cell">
-        <text class="meta-label">产品</text>
-        <text class="meta-value">{{ productName || '—' }}</text>
-      </view>
-      <view class="meta-cell">
-        <text class="meta-label">处理人/负责人</text>
-        <text class="meta-value">{{ handler || '—' }}</text>
-      </view>
-      <view class="meta-cell">
-        <text class="meta-label">处理部门</text>
-        <text class="meta-value">{{ deptName || '—' }}</text>
-      </view>
-      <view class="meta-cell">
-        <text class="meta-label">反馈人</text>
-        <text class="meta-value">{{ creatorName || '—' }}</text>
-      </view>
-      <view class="meta-cell">
-        <text class="meta-label">期望完成</text>
-        <text class="meta-value">{{ demandFinish || '—' }}</text>
+      <view
+        v-for="cell in metaCells"
+        :key="cell.label"
+        class="meta-cell"
+        :class="{ wide: cell.wide }"
+      >
+        <template v-if="cell.timePair">
+          <view class="time-pair">
+            <view
+              v-for="t in cell.timePair"
+              :key="t.label"
+              class="time-pair-item"
+            >
+              <text class="meta-label">{{ t.label }}</text>
+              <text class="meta-value">{{ t.value }}</text>
+            </view>
+          </view>
+        </template>
+        <template v-else>
+          <text class="meta-label">{{ cell.label }}</text>
+          <view class="meta-val-row">
+            <text class="meta-value">{{ cell.value }}</text>
+            <text v-if="cell.tag" class="meta-tag">{{ cell.tag }}</text>
+          </view>
+        </template>
       </view>
     </view>
 
@@ -64,7 +66,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   serial: { type: [String, Number], default: '' },
   statusLabel: { type: String, default: '-' },
   statusTone: { type: String, default: '' },
@@ -74,15 +78,74 @@ defineProps({
   urgencyTone: { type: String, default: '' },
   customer: { type: String, default: '' },
   productName: { type: String, default: '' },
+  salerName: { type: String, default: '' },
   demandFinish: { type: String, default: '' },
   handler: { type: String, default: '' },
   deptName: { type: String, default: '' },
   creatorName: { type: String, default: '' },
+  createTime: { type: String, default: '' },
+  respondedTime: { type: String, default: '' },
+  closeTime: { type: String, default: '' },
+  reassignCount: { type: [Number, String], default: 0 },
+  /** 我的反馈里被 @ 到 */
+  mentionedMe: { type: Boolean, default: false },
   overdueDays: { type: Number, default: 0 },
   actions: { type: Array, default: () => [] }
 })
 
 defineEmits(['click', 'action'])
+
+function hasText(v) {
+  return v != null && String(v).trim() !== '' && String(v).trim() !== '-'
+}
+
+/**
+ * 信息区字段：与 PC 端反馈列表列保持一致（客户/订单产品/处理人负责人/处理部门/反馈人/
+ * 业务员/期望完成/反馈时间/响应时间/关闭时间/转派次数）。
+ * 前四项是行身份信息，始终占位；其余有值才渲染，避免出现一排「—」。
+ * wide=true 的时间类字段值较长，占满整行显示完整。
+ */
+const metaCells = computed(() => {
+  const reassign = Number(props.reassignCount || 0)
+  const rows = [
+    { label: '客户', value: props.customer || '—', always: true },
+    { label: '订单产品', value: props.productName || '—', always: true },
+    { label: '处理人/负责人', value: props.handler || '—', always: true },
+    { label: '处理部门', value: props.deptName },
+    { label: '反馈人', value: props.creatorName, tag: props.mentionedMe ? '@我' : '' },
+    { label: '业务员', value: props.salerName }
+  ]
+
+  // 期望完成 + 反馈时间：用户明确要求同一行左右显示
+  const hasDemandFinish = hasText(props.demandFinish)
+  const hasCreateTime = hasText(props.createTime)
+  if (hasDemandFinish || hasCreateTime) {
+    rows.push({
+      label: '期望完成/反馈时间',
+      wide: true,
+      timePair: [
+        { label: '期望完成', value: props.demandFinish || '—' },
+        { label: '反馈时间', value: props.createTime || '—' }
+      ]
+    })
+  }
+
+  rows.push(
+    { label: '响应时间', value: props.respondedTime, wide: true },
+    { label: '关闭时间', value: props.closeTime, wide: true },
+    { label: '转派次数', value: reassign > 0 ? reassign + ' 次' : '' }
+  )
+
+  return rows
+    .filter((c) => c.always || hasText(c.value) || c.timePair)
+    .map((c) => ({
+      label: c.label,
+      value: c.value,
+      tag: c.tag || '',
+      wide: !!c.wide,
+      timePair: c.timePair || null
+    }))
+})
 </script>
 
 <style lang="scss" scoped>
@@ -262,19 +325,53 @@ defineEmits(['click', 'action'])
 .meta-cell {
   min-width: 0;
 }
+.meta-cell.wide {
+  grid-column: 1 / -1;
+}
+.time-pair {
+  display: flex;
+  flex-direction: row;
+}
+.time-pair-item {
+  flex: 1;
+  min-width: 0;
+}
+.time-pair-item:first-child {
+  padding-right: 16rpx;
+}
+.time-pair-item:last-child {
+  padding-left: 16rpx;
+}
 .meta-label {
   display: block;
   font-size: 20rpx;
   color: $pm-muted;
   margin-bottom: 4rpx;
 }
+.meta-val-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+}
 .meta-value {
-  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 24rpx;
   color: $pm-text-secondary;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.meta-tag {
+  flex: 0 0 auto;
+  margin-left: 8rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: $pm-danger-soft;
+  color: $pm-danger;
+  font-size: 18rpx;
+  font-weight: 700;
 }
 .overdue-bar {
   display: flex;

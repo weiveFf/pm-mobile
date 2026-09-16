@@ -26,6 +26,15 @@ export function setUserName(name) {
   uni.setStorageSync(K.userName, name || '')
 }
 
+/** 登录账号：后端 Create_by / UserName 口径（昵称不可替代，否则「我创建的」筛不出来） */
+export function getAccount() {
+  return uni.getStorageSync(K.account) || ''
+}
+
+export function setAccount(account) {
+  uni.setStorageSync(K.account, account || '')
+}
+
 export function getDeptId() {
   return uni.getStorageSync(K.deptId) || ''
 }
@@ -57,6 +66,7 @@ export function clearAuth() {
   uni.removeStorageSync(K.token)
   uni.removeStorageSync(K.userId)
   uni.removeStorageSync(K.userName)
+  uni.removeStorageSync(K.account)
   uni.removeStorageSync(K.deptId)
 }
 
