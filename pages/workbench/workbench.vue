@@ -117,12 +117,20 @@
         :urgency-tone="row.urgencyTone"
         :customer="row.customer"
         :product-name="row.productName"
+        :saler-name="row.salerName"
         :demand-finish="row.demandFinish"
         :handler="row.handler"
         :dept-name="row.deptName"
         :creator-name="row.creatorName"
+        :create-time="row.createTime"
+        :responded-time="row.respondedTime"
+        :close-time="row.closeTime"
+        :reassign-count="row.reassignCount"
+        :mentioned-me="row.mentionedMe"
         :overdue-days="row.overdueDays"
         :actions="row.actions"
+        :show-creator-subtitle="true"
+        :show-saler-in-meta="false"
         @click="openDetail(row.id)"
         @action="(k) => onAction(k, row)"
       />
@@ -148,6 +156,7 @@ import {
 import { WORKBENCH_TYPES, WORKBENCH_SCOPES } from '@/constants/feedbackWorkflow.js'
 import { resolveFeedbackWorkflowDisplay, formatHandlerPair, canRespondFeedbackRow } from '@/utils/feedbackWorkflow.js'
 import { getUrgencyLabel, getUrgencyTone, formatDateOnly } from '@/utils/urgencyDisplay.js'
+import { getRespondedTimeText, formatDateTimeMinute } from '@/utils/feedbackListRowHelpers.js'
 
 const typeTabs = WORKBENCH_TYPES
 const scopes = WORKBENCH_SCOPES
@@ -272,6 +281,12 @@ function mapRow(item) {
     handler: formatHandlerPair(fb),
     deptName: fb.deptName || fb.DeptName || '',
     creatorName: fb.createByNickName || fb.CreateByNickName || '',
+    salerName: project.fSalerName || project.FSALERNAME || '',
+    createTime: formatDateTimeMinute(fb.create_time || fb.createTime || fb.Create_time),
+    respondedTime: getRespondedTimeText(item.processList || item.ProcessList),
+    closeTime: formatDateTimeMinute(fb.closeTime || fb.CloseTime),
+    reassignCount: Number(fb.deptReassignCount || fb.DeptReassignCount || 0),
+    mentionedMe: !!item.isMentionedMe,
     overdueDays: item.overdueDays || 0,
     actions,
     raw: item

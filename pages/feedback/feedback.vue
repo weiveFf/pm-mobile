@@ -189,6 +189,8 @@
         :mentioned-me="row.mentionedMe"
         :overdue-days="row.overdueDays"
         :actions="row.actions"
+        :show-creator-subtitle="true"
+        :show-saler-in-meta="false"
         @click="openDetail(row.id)"
         @action="(k) => onAction(k, row)"
       />

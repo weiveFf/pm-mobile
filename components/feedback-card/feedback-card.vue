@@ -16,6 +16,10 @@
     </view>
 
     <text class="title">{{ abnormalType || '-' }} · {{ problemType || '-' }}</text>
+    <view v-if="showCreatorSubtitle && creatorName" class="creator-subtitle">
+      <text>反馈人 {{ creatorName }}</text>
+      <text v-if="mentionedMe" class="creator-at">@我</text>
+    </view>
 
     <view class="meta-grid">
       <view
@@ -90,7 +94,11 @@ const props = defineProps({
   /** 我的反馈里被 @ 到 */
   mentionedMe: { type: Boolean, default: false },
   overdueDays: { type: Number, default: 0 },
-  actions: { type: Array, default: () => [] }
+  actions: { type: Array, default: () => [] },
+  /** 反馈人是否以副标题形式显示在标题下方；true 时不再出现在 meta 网格里 */
+  showCreatorSubtitle: { type: Boolean, default: false },
+  /** 是否在 meta 网格里显示业务员 */
+  showSalerInMeta: { type: Boolean, default: true }
 })
 
 defineEmits(['click', 'action'])
@@ -111,10 +119,14 @@ const metaCells = computed(() => {
     { label: '客户', value: props.customer || '—', always: true },
     { label: '订单产品', value: props.productName || '—', always: true },
     { label: '处理人/负责人', value: props.handler || '—', always: true },
-    { label: '处理部门', value: props.deptName },
-    { label: '反馈人', value: props.creatorName, tag: props.mentionedMe ? '@我' : '' },
-    { label: '业务员', value: props.salerName }
+    { label: '处理部门', value: props.deptName }
   ]
+  if (!props.showCreatorSubtitle) {
+    rows.push({ label: '反馈人', value: props.creatorName, tag: props.mentionedMe ? '@我' : '' })
+  }
+  if (props.showSalerInMeta) {
+    rows.push({ label: '业务员', value: props.salerName })
+  }
 
   // 期望完成 + 反馈时间：用户明确要求同一行左右显示
   const hasDemandFinish = hasText(props.demandFinish)
@@ -312,7 +324,25 @@ const metaCells = computed(() => {
   color: $pm-text;
   letter-spacing: -0.5rpx;
   line-height: 1.35;
-  margin-bottom: 16rpx;
+  margin-bottom: 6rpx;
+}
+.creator-subtitle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 22rpx;
+  color: $pm-muted;
+  margin-bottom: 14rpx;
+  font-weight: 650;
+}
+.creator-at {
+  margin-left: 8rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: $pm-danger-soft;
+  color: $pm-danger;
+  font-size: 18rpx;
+  font-weight: 700;
 }
 .meta-grid {
   display: grid;
