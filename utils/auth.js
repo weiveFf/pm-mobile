@@ -1,0 +1,90 @@
+import config from '@/config/index.js'
+
+const K = config.storageKeys
+
+export function getToken() {
+  return uni.getStorageSync(K.token) || ''
+}
+
+export function setToken(token) {
+  uni.setStorageSync(K.token, token || '')
+}
+
+export function getUserId() {
+  return uni.getStorageSync(K.userId) || ''
+}
+
+export function setUserId(userId) {
+  uni.setStorageSync(K.userId, userId || '')
+}
+
+export function getUserName() {
+  return uni.getStorageSync(K.userName) || ''
+}
+
+export function setUserName(name) {
+  uni.setStorageSync(K.userName, name || '')
+}
+
+export function getDeptId() {
+  return uni.getStorageSync(K.deptId) || ''
+}
+
+export function setDeptId(deptId) {
+  uni.setStorageSync(K.deptId, deptId != null ? String(deptId) : '')
+}
+
+export function normalizeBaseURL(url) {
+  return (url || '').trim().replace(/\/+$/, '')
+}
+
+export function isValidBaseURL(url) {
+  const u = normalizeBaseURL(url)
+  if (!u) return false
+  return /^https?:\/\/.+/i.test(u)
+}
+
+export function getBaseURL() {
+  const stored = uni.getStorageSync(K.baseURL)
+  return normalizeBaseURL(stored) || config.baseURL
+}
+
+export function setBaseURL(url) {
+  uni.setStorageSync(K.baseURL, normalizeBaseURL(url))
+}
+
+export function clearAuth() {
+  uni.removeStorageSync(K.token)
+  uni.removeStorageSync(K.userId)
+  uni.removeStorageSync(K.userName)
+  uni.removeStorageSync(K.deptId)
+}
+
+export function isLoggedIn() {
+  return !!getToken()
+}
+
+export function getRemember() {
+  return !!uni.getStorageSync(K.remember)
+}
+
+export function setRemember(val) {
+  uni.setStorageSync(K.remember, val ? '1' : '')
+}
+
+export function getSavedLogin() {
+  return {
+    username: uni.getStorageSync(K.savedUser) || '',
+    password: uni.getStorageSync(K.savedPwd) || ''
+  }
+}
+
+export function saveLogin(username, password) {
+  uni.setStorageSync(K.savedUser, username)
+  uni.setStorageSync(K.savedPwd, password)
+}
+
+export function clearSavedLogin() {
+  uni.removeStorageSync(K.savedUser)
+  uni.removeStorageSync(K.savedPwd)
+}

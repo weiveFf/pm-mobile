@@ -1,0 +1,391 @@
+<template>
+  <view class="pm-page">
+    <app-nav-bar title="我的" :show-back="false" />
+
+    <!-- 个人 Hero 卡(ME-01 · 森林渐变) -->
+    <view class="hero-card">
+      <view class="deco" />
+      <view class="me-row" @click="noop">
+        <view class="avatar">{{ avatarLetter }}</view>
+        <view class="me-info">
+          <text class="me-name">{{ userName || '未登录' }}</text>
+          <text class="me-meta">ID {{ userId || '-' }}</text>
+        </view>
+        <text class="me-chev">›</text>
+      </view>
+      <view class="me-stats">
+        <view class="ms">
+          <text class="ms-n">{{ version }}</text>
+          <text class="ms-l">版本</text>
+        </view>
+        <view class="ms">
+          <text class="ms-n">{{ baseURL ? '已连接' : '未配置' }}</text>
+          <text class="ms-l">接口</text>
+        </view>
+        <view class="ms">
+          <text class="ms-n">{{ userId ? '在线' : '离线' }}</text>
+          <text class="ms-l">状态</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 常用功能 · 双列瓷贴(ME-01) -->
+    <view class="shead"><text class="st">常用功能</text></view>
+    <view class="mgrid">
+      <view class="mitem pressable" @click="goStats">
+        <view class="sq s5">◔</view>
+        <view class="mtxt">
+          <text class="mt">数据看板</text>
+          <text class="msub">看看最近做得怎么样</text>
+        </view>
+        <text class="ar">›</text>
+      </view>
+      <view class="mitem pressable" @click="syncNow">
+        <view class="sq s1">⇱</view>
+        <view class="mtxt">
+          <text class="mt">接口地址</text>
+          <text class="msub">{{ baseURL ? '已连接' : '未配置' }}</text>
+        </view>
+        <text class="ar">›</text>
+      </view>
+    </view>
+
+    <!-- 接口地址编辑 -->
+    <view v-if="showBaseEdit" class="tile col">
+      <text class="tile-title">接口地址</text>
+      <input v-model="editBase" class="url" placeholder="http://host:port" />
+      <view class="save-row">
+        <text class="hint">修改后立即生效</text>
+        <text class="save" @click="saveBase">保存</text>
+      </view>
+    </view>
+
+    <view class="shead"><text class="st">其他</text></view>
+    <view class="mgrid one">
+      <view class="mitem pressable" @click="onAbout">
+        <view class="sq s2">ⓘ</view>
+        <view class="mtxt">
+          <text class="mt">关于 {{ config.appName || 'Yessys PM' }}</text>
+          <text class="msub">{{ version }}</text>
+        </view>
+        <text class="ar">›</text>
+      </view>
+    </view>
+
+    <view class="logout pressable" @click="logout">退出登录</view>
+    <view class="pm-safe-bottom" />
+  </view>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import config from '@/config/index.js'
+import {
+  getUserName,
+  getUserId,
+  getBaseURL,
+  setBaseURL,
+  isValidBaseURL,
+  clearAuth
+} from '@/utils/auth.js'
+import { ensureLoggedIn } from '@/utils/authGuard.js'
+import { logoutApi } from '@/api/login.js'
+
+const userName = ref('')
+const userId = ref('')
+const baseURL = ref('')
+const editBase = ref('')
+const showBaseEdit = ref(false)
+const version = config.version
+
+const avatarLetter = computed(() => {
+  const n = (userName.value || 'Y').trim()
+  return n ? n.substring(0, 1).toUpperCase() : 'Y'
+})
+
+function refresh() {
+  userName.value = getUserName()
+  userId.value = getUserId()
+  baseURL.value = getBaseURL()
+  editBase.value = baseURL.value
+}
+
+function noop() {}
+
+function syncNow() {
+  showBaseEdit.value = !showBaseEdit.value
+}
+
+function saveBase() {
+  if (!isValidBaseURL(editBase.value)) {
+    uni.showToast({ title: '地址无效', icon: 'none' })
+    return
+  }
+  setBaseURL(editBase.value)
+  baseURL.value = getBaseURL()
+  showBaseEdit.value = false
+  uni.showToast({ title: '已保存', icon: 'success' })
+}
+
+function onAbout() {
+  uni.showToast({ title: config.appName + ' ' + version, icon: 'none' })
+}
+
+function goStats() {
+  uni.navigateTo({ url: '/pages/stats/stats' })
+}
+
+async function logout() {
+  try {
+    await logoutApi()
+  } catch (e) {}
+  clearAuth()
+  uni.reLaunch({ url: '/pages/login/login' })
+}
+
+onShow(() => {
+  if (!ensureLoggedIn()) return
+  refresh()
+})
+</script>
+
+<style lang="scss" scoped>
+@import '@/uni.scss';
+
+/* —— 个人 Hero 卡 —— */
+.hero-card {
+  margin: 12rpx 24rpx 0;
+  padding: 32rpx;
+  border-radius: $pm-radius-lg;
+  background: $pm-grad-hero;
+  color: #fff;
+  box-shadow: $pm-shadow-lg;
+  position: relative;
+  overflow: hidden;
+}
+.deco {
+  position: absolute;
+  right: -52rpx;
+  top: -60rpx;
+  width: 260rpx;
+  height: 260rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+.me-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+}
+.avatar {
+  width: 108rpx;
+  height: 108rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  border: 3rpx solid rgba(255, 255, 255, 0.55);
+  color: #fff;
+  font-size: 44rpx;
+  font-weight: 800;
+  text-align: center;
+  line-height: 102rpx;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+}
+.me-info {
+  flex: 1;
+  min-width: 0;
+}
+.me-name {
+  display: block;
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.me-meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+.me-chev {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.8);
+}
+.me-stats {
+  display: flex;
+  flex-direction: row;
+  margin-top: 28rpx;
+  padding-top: 24rpx;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  position: relative;
+}
+.ms {
+  flex: 1;
+  text-align: center;
+}
+.ms + .ms {
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+}
+.ms-n {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #fff;
+}
+.ms-l {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+
+/* —— 小节头 —— */
+.shead {
+  padding: 28rpx 32rpx 16rpx;
+}
+.st {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: $pm-text;
+  letter-spacing: -0.3rpx;
+}
+
+/* —— 双列菜单瓷贴 —— */
+.mgrid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin: 0 16rpx;
+}
+.mgrid.one {
+  display: block;
+}
+.mitem {
+  width: calc(50% - 20rpx);
+  margin: 0 10rpx 20rpx;
+  background: $pm-surface;
+  border-radius: $pm-radius;
+  padding: 24rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  box-shadow: $pm-shadow;
+  border: 1px solid $pm-line;
+  box-sizing: border-box;
+}
+.mgrid.one .mitem {
+  width: auto;
+}
+.sq {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 22rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  color: #fff;
+  flex-shrink: 0;
+  margin-right: 20rpx;
+}
+.sq.s1 {
+  background: $pm-tile-info;
+  box-shadow: 0 6px 12px -4px rgba(63, 108, 176, 0.35);
+}
+.sq.s2 {
+  background: $pm-tile-amber;
+  box-shadow: 0 6px 12px -4px rgba(194, 135, 42, 0.35);
+}
+.sq.s5 {
+  background: $pm-tile-sage;
+  box-shadow: 0 6px 12px -4px rgba(61, 128, 94, 0.35);
+}
+.mtxt {
+  flex: 1;
+  min-width: 0;
+}
+.mt {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 750;
+  color: $pm-text;
+}
+.msub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: $pm-muted;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ar {
+  color: #C6C0B2;
+  font-size: 28rpx;
+  margin-left: 8rpx;
+}
+
+/* —— 接口地址编辑卡 —— */
+.tile.col {
+  margin: 0 24rpx 20rpx;
+  padding: 28rpx;
+  background: $pm-surface;
+  border-radius: $pm-radius;
+  box-shadow: $pm-shadow;
+  display: flex;
+  flex-direction: column;
+}
+.tile-title {
+  font-size: 26rpx;
+  font-weight: 750;
+  color: $pm-text;
+}
+.url {
+  margin-top: 20rpx;
+  height: 80rpx;
+  padding: 0 28rpx;
+  background: $pm-bg-2;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  color: $pm-text;
+}
+.save-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18rpx;
+}
+.hint {
+  font-size: 22rpx;
+  color: $pm-muted;
+}
+.save {
+  font-size: 26rpx;
+  color: $pm-primary;
+  font-weight: 750;
+}
+
+/* —— 退出 —— */
+.logout {
+  margin: 12rpx 24rpx 28rpx;
+  text-align: center;
+  padding: 28rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: $pm-danger;
+  background: $pm-surface;
+  border: 1px solid $pm-line;
+  border-radius: 999rpx;
+  box-shadow: $pm-shadow;
+}
+</style>

@@ -1,0 +1,94 @@
+@import '@/uni.scss';
+
+.pm-page {
+  min-height: 100%;
+  background:
+    radial-gradient(ellipse 80% 40% at 10% -5%, rgba(14, 95, 59, 0.07), transparent 55%),
+    radial-gradient(ellipse 60% 30% at 100% 0%, rgba(184, 116, 74, 0.05), transparent 50%),
+    $pm-bg;
+  font-family: $pm-font;
+}
+
+.pm-filter {
+  margin: 16rpx 24rpx 0;
+  padding: 24rpx;
+  background: $pm-surface;
+  border-radius: $pm-radius;
+  box-shadow: $pm-shadow;
+}
+
+.pm-filter-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.pm-filter-label {
+  width: 120rpx;
+  font-size: 24rpx;
+  color: $pm-muted;
+  flex-shrink: 0;
+}
+
+.pm-filter-input {
+  flex: 1;
+  height: 76rpx;
+  padding: 0 28rpx;
+  background: $pm-bg;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: $pm-text;
+}
+
+.pm-filter-actions {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.pm-filter-actions button {
+  margin-left: 12rpx;
+  font-size: 24rpx;
+  line-height: 64rpx;
+  height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: $pm-bg;
+  color: $pm-text-secondary;
+  border: none;
+}
+
+.pm-list {
+  padding: 16rpx 24rpx 56rpx;
+}
+
+.pm-card {
+  background: $pm-surface;
+  border-radius: $pm-radius;
+  padding: 32rpx;
+  margin-bottom: 20rpx;
+  box-shadow: $pm-shadow;
+}
+
+.pm-card-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: $pm-text;
+  margin-bottom: 8rpx;
+  letter-spacing: -0.4rpx;
+}
+
+.pm-card-meta {
+  font-size: 24rpx;
+  color: $pm-muted;
+  line-height: 1.55;
+}
+
+.pm-load-more {
+  text-align: center;
+  padding: 36rpx;
+  color: $pm-muted;
+  font-size: 22rpx;
+}

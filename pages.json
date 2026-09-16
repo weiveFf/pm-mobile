@@ -1,0 +1,160 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "登录",
+        "disableScroll": true
+      }
+    },
+    {
+      "path": "pages/workbench/workbench",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "工作台",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/project/project",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "项目列表",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/feedback/feedback",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "反馈列表",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/mine/mine",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/project-detail/project-detail",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "项目详情"
+      }
+    },
+    {
+      "path": "pages/add-feedback/add-feedback",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "添加反馈"
+      }
+    },
+    {
+      "path": "pages/feedback-detail/feedback-detail",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "反馈详情"
+      }
+    },
+    {
+      "path": "pages/process/process",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "处理反馈"
+      }
+    },
+    {
+      "path": "pages/reapply/reapply",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "申请再处理"
+      }
+    },
+    {
+      "path": "pages/change-recipient/change-recipient",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "修改处理人"
+      }
+    },
+    {
+      "path": "pages/reassign-dept/reassign-dept",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "重新分配部门"
+      }
+    },
+    {
+      "path": "pages/delay/delay",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "延期"
+      }
+    },
+    {
+      "path": "pages/complaint-audit/complaint-audit",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "客诉审核"
+      }
+    },
+    {
+      "path": "pages/stats/stats",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "数据统计",
+        "enablePullDownRefresh": true
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "项目管理",
+    "navigationBarBackgroundColor": "#FAF8F4",
+    "backgroundColor": "#FAF8F4"
+  },
+  "tabBar": {
+    "color": "#7B847D",
+    "selectedColor": "#0E5F3B",
+    "borderStyle": "white",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "pages/workbench/workbench",
+        "text": "工作台",
+        "iconPath": "static/tab/home.png",
+        "selectedIconPath": "static/tab/home-active.png"
+      },
+      {
+        "pagePath": "pages/project/project",
+        "text": "项目",
+        "iconPath": "static/tab/entry.png",
+        "selectedIconPath": "static/tab/entry-active.png"
+      },
+      {
+        "pagePath": "pages/feedback/feedback",
+        "text": "反馈",
+        "iconPath": "static/tab/inventory.png",
+        "selectedIconPath": "static/tab/inventory-active.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "static/tab/settings.png",
+        "selectedIconPath": "static/tab/settings-active.png"
+      }
+    ]
+  },
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^app-nav-bar$": "@/components/app-nav-bar/app-nav-bar.vue",
+      "^feedback-card$": "@/components/feedback-card/feedback-card.vue",
+      "^status-chip$": "@/components/status-chip/status-chip.vue"
+    }
+  }
+}

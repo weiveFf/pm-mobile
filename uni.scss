@@ -1,0 +1,42 @@
+/* VITAL × FOREST — 设计稿 token(v6 融合终版) */
+$pm-primary: #0E5F3B;
+$pm-primary-deep: #0A4A2D;
+$pm-primary-soft: #E2EDE7;
+$pm-accent: #E2EDE7;
+$pm-sage: #3D805E;
+$pm-forest-hi: #4C9A6F;
+$pm-copper: #B8744A;
+$pm-copper-soft: #E8D5C5;
+$pm-bg: #FAF8F4;
+$pm-bg-2: #F4F1EB;
+$pm-surface: #FFFFFF;
+$pm-text: #0F1411;
+$pm-text-secondary: #3D4540;
+$pm-muted: #7B847D;
+$pm-ink-4: #B5BCB6;
+$pm-line: #E9E4D8;
+$pm-danger: #B8423B;
+$pm-danger-soft: #FAE8E6;
+$pm-warn: #C2872A;
+$pm-warn-soft: #FBEED7;
+$pm-info: #3F6CB0;
+$pm-info-soft: #E5EDF7;
+$pm-radius: 24rpx;
+$pm-radius-sm: 16rpx;
+$pm-radius-lg: 28rpx;
+$pm-shadow: 0 2px 4px rgba(14, 95, 59, 0.04), 0 6px 16px -4px rgba(14, 95, 59, 0.09);
+$pm-shadow-lg: 0 4px 8px rgba(14, 95, 59, 0.05), 0 16px 32px -8px rgba(14, 95, 59, 0.22);
+$pm-grad-brand: linear-gradient(135deg, #4C9A6F 0%, #0E5F3B 55%, #0A4A2D 100%);
+$pm-grad-hero: linear-gradient(140deg, #0A4A2D 0%, #0E5F3B 48%, #2E7A52 100%);
+$pm-grad-copper: linear-gradient(135deg, #D89A6E, #B8744A);
+/* 功能瓷贴 · 森林协调系(降饱和) */
+$pm-tile-brand: $pm-grad-brand;
+$pm-tile-info: linear-gradient(135deg, #7C9BD1, #3F6CB0);
+$pm-tile-amber: linear-gradient(135deg, #DFAF5C, #C2872A);
+$pm-tile-copper: linear-gradient(135deg, #D89A6E, #B8744A);
+$pm-tile-danger: linear-gradient(135deg, #D9837E, #B8423B);
+$pm-tile-sage: linear-gradient(135deg, #8FB79E, #3D805E);
+$pm-font: "Outfit", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+$pm-mono: "JetBrains Mono", "Menlo", monospace;
+/* 按压反馈 · 150ms 弹性回弹(设计稿 .pressable) */
+$pm-press-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
