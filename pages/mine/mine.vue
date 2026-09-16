@@ -1,79 +1,100 @@
 <template>
-  <view class="pm-page">
+  <view class="pm-page mine-page">
     <app-nav-bar title="我的" :show-back="false" />
 
-    <!-- 个人 Hero 卡(ME-01 · 森林渐变) -->
-    <view class="hero-card">
-      <view class="deco" />
-      <view class="me-row" @click="noop">
-        <view class="avatar">{{ avatarLetter }}</view>
-        <view class="me-info">
-          <text class="me-name">{{ userName || '未登录' }}</text>
-          <text class="me-meta">ID {{ userId || '-' }}</text>
+    <!-- 内容区：唯一滚动区域，退出登录固定在屏幕底部 -->
+    <view class="mine-body">
+      <!-- 个人 Hero 卡(ME-01 · 森林渐变) -->
+      <view class="hero-card">
+        <view class="deco" />
+        <view class="me-row" @click="noop">
+          <view class="avatar">{{ avatarLetter }}</view>
+          <view class="me-info">
+            <text class="me-name">{{ userName || '未登录' }}</text>
+            <text class="me-meta">ID {{ userId || '-' }}</text>
+          </view>
+          <text class="me-chev">›</text>
         </view>
-        <text class="me-chev">›</text>
+        <view class="me-stats">
+          <view class="ms">
+            <text class="ms-n">{{ version }}</text>
+            <text class="ms-l">版本</text>
+          </view>
+          <view class="ms">
+            <text class="ms-n">{{ baseURL ? '已连接' : '未配置' }}</text>
+            <text class="ms-l">接口</text>
+          </view>
+          <view class="ms">
+            <text class="ms-n">{{ userId ? '在线' : '离线' }}</text>
+            <text class="ms-l">状态</text>
+          </view>
+        </view>
       </view>
-      <view class="me-stats">
-        <view class="ms">
-          <text class="ms-n">{{ version }}</text>
-          <text class="ms-l">版本</text>
-        </view>
-        <view class="ms">
-          <text class="ms-n">{{ baseURL ? '已连接' : '未配置' }}</text>
-          <text class="ms-l">接口</text>
-        </view>
-        <view class="ms">
-          <text class="ms-n">{{ userId ? '在线' : '离线' }}</text>
-          <text class="ms-l">状态</text>
-        </view>
-      </view>
-    </view>
 
-    <!-- 常用功能 · 双列瓷贴(ME-01) -->
-    <view class="shead"><text class="st">常用功能</text></view>
-    <view class="mgrid">
-      <view class="mitem pressable" @click="goStats">
-        <view class="sq s5">◔</view>
-        <view class="mtxt">
-          <text class="mt">数据看板</text>
-          <text class="msub">看看最近做得怎么样</text>
+      <!-- 常用功能 · 双列瓷贴(ME-01) -->
+      <view class="shead"><text class="st">常用功能</text></view>
+      <view class="mgrid">
+        <view class="mitem pressable" @click="goStats">
+          <view class="sq s5">◔</view>
+          <view class="mtxt">
+            <text class="mt">数据看板</text>
+            <text class="msub">看看最近做得怎么样</text>
+          </view>
+          <text class="ar">›</text>
         </view>
-        <text class="ar">›</text>
-      </view>
-      <view class="mitem pressable" @click="syncNow">
-        <view class="sq s1">⇱</view>
-        <view class="mtxt">
-          <text class="mt">接口地址</text>
-          <text class="msub">{{ baseURL ? '已连接' : '未配置' }}</text>
+        <view class="mitem pressable" @click="syncNow">
+          <view class="sq s1">⇱</view>
+          <view class="mtxt">
+            <text class="mt">接口地址</text>
+            <text class="msub">{{ baseURL ? '已连接' : '未配置' }}</text>
+          </view>
+          <text class="ar">›</text>
         </view>
-        <text class="ar">›</text>
       </view>
-    </view>
 
-    <!-- 接口地址编辑 -->
-    <view v-if="showBaseEdit" class="tile col">
-      <text class="tile-title">接口地址</text>
-      <input v-model="editBase" class="url" placeholder="http://host:port" />
-      <view class="save-row">
-        <text class="hint">修改后立即生效</text>
-        <text class="save" @click="saveBase">保存</text>
-      </view>
-    </view>
-
-    <view class="shead"><text class="st">其他</text></view>
-    <view class="mgrid one">
-      <view class="mitem pressable" @click="onAbout">
-        <view class="sq s2">ⓘ</view>
-        <view class="mtxt">
-          <text class="mt">关于 {{ config.appName || 'Yessys PM' }}</text>
-          <text class="msub">{{ version }}</text>
+      <!-- 接口地址编辑 -->
+      <view v-if="showBaseEdit" class="tile col">
+        <text class="tile-title">接口地址</text>
+        <input v-model="editBase" class="url" placeholder="http://host:port" />
+        <view class="save-row">
+          <text class="hint">修改后立即生效</text>
+          <text class="save" @click="saveBase">保存</text>
         </view>
-        <text class="ar">›</text>
       </view>
-    </view>
 
-    <view class="logout pressable" @click="logout">退出登录</view>
-    <view class="pm-safe-bottom" />
+      <view class="shead"><text class="st">账号与安全</text></view>
+      <view class="mgrid one">
+        <view class="mitem pressable" @click="goChangePwd">
+          <view class="sq s3">⚿</view>
+          <view class="mtxt">
+            <text class="mt">修改密码</text>
+            <text class="msub">定期更换，账号更安全</text>
+          </view>
+          <text class="ar">›</text>
+        </view>
+        <view class="mitem pressable" @click="onAbout">
+          <view class="sq s2">ⓘ</view>
+          <view class="mtxt">
+            <text class="mt">关于 {{ config.appName || 'Yessys PM' }}</text>
+            <text class="msub">{{ version }}</text>
+          </view>
+          <text class="ar">›</text>
+        </view>
+      </view>
+
+      <!-- 退出登录：单独成组，弹性空白把它推到内容区底部 -->
+      <view class="mgrid one push-bottom">
+        <view class="mitem pressable logout-item" @click="logout">
+          <view class="sq logout-sq">⇥</view>
+          <view class="mtxt">
+            <text class="mt logout-text">退出登录</text>
+          </view>
+          <text class="ar logout-arrow">›</text>
+        </view>
+      </view>
+      <!-- 底部留白，避免贴 TabBar -->
+      <view class="bottom-spacer" />
+    </view>
   </view>
 </template>
 
@@ -136,6 +157,10 @@ function goStats() {
   uni.navigateTo({ url: '/pages/stats/stats' })
 }
 
+function goChangePwd() {
+  uni.navigateTo({ url: '/pages/change-password/change-password' })
+}
+
 async function logout() {
   try {
     await logoutApi()
@@ -152,6 +177,45 @@ onShow(() => {
 
 <style lang="scss" scoped>
 @import '@/uni.scss';
+
+/* —— 页面：内容区滚动，退出登录固定屏幕底部 —— */
+.mine-page {
+  display: flex;
+  flex-direction: column;
+  /* 覆盖全局 .pm-page 的 min-height:100%，避免与固定高度冲突 */
+  min-height: 0;
+  height: 100vh; /* 兜底：防止 --window-bottom 未定义导致 calc 失效 */
+  height: calc(100vh - var(--window-bottom, 0px));
+  overflow: hidden;
+  box-sizing: border-box;
+  overscroll-behavior-y: none;
+}
+.mine-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  /* flex 列布局：让「退出登录」能被 auto margin 推到内容区底部 */
+  display: flex;
+  flex-direction: column;
+  /* 卡片自带 20rpx 下边距，这里只补一点余量 */
+  padding-bottom: 8rpx;
+}
+/* flex 子项不压缩，避免卡片被挤扁 */
+.mine-body > view {
+  flex-shrink: 0;
+}
+/* 弹性空白集中在「关于 → 退出登录」之间 */
+.push-bottom {
+  margin-top: auto;
+}
+.bottom-spacer {
+  height: 16rpx;
+  /* 全面屏底部安全区 */
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
 /* —— 个人 Hero 卡 —— */
 .hero-card {
@@ -305,6 +369,10 @@ onShow(() => {
   background: $pm-tile-amber;
   box-shadow: 0 6px 12px -4px rgba(194, 135, 42, 0.35);
 }
+.sq.s3 {
+  background: $pm-tile-copper;
+  box-shadow: 0 6px 12px -4px rgba(184, 116, 74, 0.35);
+}
 .sq.s5 {
   background: $pm-tile-sage;
   box-shadow: 0 6px 12px -4px rgba(61, 128, 94, 0.35);
@@ -375,17 +443,19 @@ onShow(() => {
   font-weight: 750;
 }
 
-/* —— 退出 —— */
-.logout {
-  margin: 12rpx 24rpx 28rpx;
-  text-align: center;
-  padding: 28rpx;
-  font-size: 28rpx;
-  font-weight: 700;
+/* —— 退出登录：作为账号与安全列表项，仅文字用红色强调 —— */
+.logout-item {
+  margin-top: 0;
+}
+.logout-sq {
+  background: $pm-danger-soft;
+  box-shadow: 0 6px 12px -4px rgba(190, 75, 72, 0.3);
   color: $pm-danger;
-  background: $pm-surface;
-  border: 1px solid $pm-line;
-  border-radius: 999rpx;
-  box-shadow: $pm-shadow;
+}
+.logout-text {
+  color: $pm-danger;
+}
+.logout-arrow {
+  color: $pm-danger;
 }
 </style>
