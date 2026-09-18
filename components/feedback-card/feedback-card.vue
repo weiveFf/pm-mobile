@@ -111,7 +111,7 @@ function hasText(v) {
  * 信息区字段：与 PC 端反馈列表列保持一致（客户/订单产品/处理人负责人/处理部门/反馈人/
  * 业务员/期望完成/反馈时间/响应时间/关闭时间/转派次数）。
  * 前四项是行身份信息，始终占位；其余有值才渲染，避免出现一排「—」。
- * wide=true 的时间类字段值较长，占满整行显示完整。
+ * 仅「期望完成/反馈时间」成对占整行；其余字段一律两列排布，避免单字段独占一行。
  */
 const metaCells = computed(() => {
   const reassign = Number(props.reassignCount || 0)
@@ -119,7 +119,7 @@ const metaCells = computed(() => {
     { label: '客户', value: props.customer || '—', always: true },
     { label: '订单产品', value: props.productName || '—', always: true },
     { label: '处理人/负责人', value: props.handler || '—', always: true },
-    { label: '处理部门', value: props.deptName }
+    { label: '处理部门', value: props.deptName || '—', always: true }
   ]
   if (!props.showCreatorSubtitle) {
     rows.push({ label: '反馈人', value: props.creatorName, tag: props.mentionedMe ? '@我' : '' })
@@ -143,9 +143,9 @@ const metaCells = computed(() => {
   }
 
   rows.push(
-    { label: '响应时间', value: props.respondedTime, wide: true },
-    { label: '关闭时间', value: props.closeTime, wide: true },
-    { label: '转派次数', value: reassign > 0 ? reassign + ' 次' : '' }
+    { label: '响应时间', value: props.respondedTime },
+    { label: '转派次数', value: reassign > 0 ? reassign + ' 次' : '' },
+    { label: '关闭时间', value: props.closeTime }
   )
 
   return rows

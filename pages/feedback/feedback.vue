@@ -2,7 +2,7 @@
   <view class="pm-page fb-page">
     <app-nav-bar title="反馈列表" :show-back="false" />
 
-    <!-- 三个分类：居中占满，与工作台一致 -->
+    <!-- 三个分类：居中占满 -->
     <view class="mode-wrap">
       <view class="mode-tabs">
         <view
@@ -17,59 +17,62 @@
       </view>
     </view>
 
-    <!-- 检索条件：与 PC 端反馈列表对齐，低频条件收进「更多」 -->
-    <view class="pm-filter">
-      <view class="pm-filter-row">
-        <text class="pm-filter-label">流水号</text>
-        <input v-model="query.serialNumber" class="pm-filter-input" placeholder="流水号" confirm-type="search" @confirm="search" />
+    <!-- 结果条：总数 + 筛选入口（带已选条件角标） -->
+    <view class="fb-result-bar">
+      <text class="fb-count">共 <text class="num">{{ total }}</text> 条反馈</text>
+      <view class="fb-filter-btn" @click="toggleFilter">
+        <svg class="fb-filter-ico" viewBox="0 0 24 24"><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" fill="currentColor" /></svg>
+        <text class="fb-filter-txt">筛选</text>
+        <view v-if="activeFilterCount" class="fb-filter-badge">{{ activeFilterCount }}</view>
       </view>
+    </view>
 
-      <!-- 默认只显示两行：流水号 + 异常类型/状态或问题类型并排，其余条件收进「更多」 -->
-      <view class="pm-filter-row half">
-        <view class="pm-filter-col">
-          <text class="pm-filter-label">异常类型</text>
-          <picker :range="abnormalLabels" :value="abnormalIndex" @change="onAbnormal">
-            <view class="pm-filter-input picker">{{ abnormalLabels[abnormalIndex] }}</view>
-          </picker>
+    <!-- 内联筛选面板：默认收起，点击筛选展开（非抽屉，原地下滑） -->
+    <view v-if="showFilter" class="fb-filter">
+      <scroll-view class="fb-filter-scroll" scroll-y>
+        <view class="fb-field">
+          <text class="fb-label">流水号</text>
+          <input v-model="query.serialNumber" class="fb-input" placeholder="流水号" confirm-type="search" @confirm="applyFilter" />
         </view>
-        <view v-if="mode !== 'pending'" class="pm-filter-col">
-          <text class="pm-filter-label">状态</text>
-          <picker :range="statusLabels" :value="statusIndex" @change="onStatus">
-            <view class="pm-filter-input picker">{{ statusLabels[statusIndex] }}</view>
-          </picker>
-        </view>
-        <view v-if="mode === 'pending'" class="pm-filter-col">
-          <text class="pm-filter-label">问题类型</text>
-          <picker
-            v-if="problemOptions.length"
-            :range="problemLabels"
-            :value="problemIndex"
-            @change="onProblem"
-          >
-            <view class="pm-filter-input picker">{{ problemLabels[problemIndex] }}</view>
-          </picker>
-          <view v-else class="pm-filter-input picker disabled">先选异常类型</view>
-        </view>
-      </view>
 
-      <!-- 更多筛选：默认收起，点击后查看全部条件 -->
-      <view v-if="expanded">
-        <view v-if="mode === 'mine'" class="pm-filter-row">
-          <text class="pm-filter-label">反馈范围</text>
+        <view class="fb-row">
+          <view class="fb-col">
+            <text class="fb-label">异常类型</text>
+            <picker :range="abnormalLabels" :value="abnormalIndex" @change="onAbnormal">
+              <view class="fb-input picker">{{ abnormalLabels[abnormalIndex] }}</view>
+            </picker>
+          </view>
+          <view v-if="mode !== 'pending'" class="fb-col">
+            <text class="fb-label">状态</text>
+            <picker :range="statusLabels" :value="statusIndex" @change="onStatus">
+              <view class="fb-input picker">{{ statusLabels[statusIndex] }}</view>
+            </picker>
+          </view>
+          <view v-if="mode === 'pending'" class="fb-col">
+            <text class="fb-label">问题类型</text>
+            <picker v-if="problemOptions.length" :range="problemLabels" :value="problemIndex" @change="onProblem">
+              <view class="fb-input picker">{{ problemLabels[problemIndex] }}</view>
+            </picker>
+            <view v-else class="fb-input picker disabled">先选异常类型</view>
+          </view>
+        </view>
+
+        <view v-if="mode === 'mine'" class="fb-field">
+          <text class="fb-label">反馈范围</text>
           <picker :range="mineScopeLabels" :value="mineScopeIndex" @change="onMineScope">
-            <view class="pm-filter-input picker">{{ mineScopeLabels[mineScopeIndex] }}</view>
+            <view class="fb-input picker">{{ mineScopeLabels[mineScopeIndex] }}</view>
           </picker>
         </view>
 
-        <view v-if="mode === 'list'" class="pm-filter-row">
-          <text class="pm-filter-label">与我相关</text>
+        <view v-if="mode === 'list'" class="fb-field">
+          <text class="fb-label">与我相关</text>
           <picker :range="relatedLabels" :value="relatedIndex" @change="onRelated">
-            <view class="pm-filter-input picker">{{ relatedLabels[relatedIndex] }}</view>
+            <view class="fb-input picker">{{ relatedLabels[relatedIndex] }}</view>
           </picker>
         </view>
 
-        <view v-if="mode === 'pending'" class="pm-filter-row">
-          <text class="pm-filter-label">期望完成</text>
+        <view v-if="mode === 'pending'" class="fb-field">
+          <text class="fb-label">期望完成</text>
           <view class="date-range">
             <picker mode="date" :value="dateBegin || today" @change="onDateBegin">
               <view class="dr-item" :class="{ empty: !dateBegin }">{{ dateBegin || '开始日期' }}</view>
@@ -82,50 +85,45 @@
           </view>
         </view>
 
-        <view v-if="mode !== 'pending'" class="pm-filter-row">
-          <text class="pm-filter-label">问题类型</text>
-          <picker
-            v-if="problemOptions.length"
-            :range="problemLabels"
-            :value="problemIndex"
-            @change="onProblem"
-          >
-            <view class="pm-filter-input picker">{{ problemLabels[problemIndex] }}</view>
+        <view v-if="mode !== 'pending'" class="fb-field">
+          <text class="fb-label">问题类型</text>
+          <picker v-if="problemOptions.length" :range="problemLabels" :value="problemIndex" @change="onProblem">
+            <view class="fb-input picker">{{ problemLabels[problemIndex] }}</view>
           </picker>
-          <view v-else class="pm-filter-input picker disabled">先选异常类型</view>
+          <view v-else class="fb-input picker disabled">先选异常类型</view>
         </view>
 
-        <view class="pm-filter-row">
-          <text class="pm-filter-label">紧急程度</text>
+        <view class="fb-field">
+          <text class="fb-label">紧急程度</text>
           <picker :range="urgencyLabels" :value="urgencyIndex" @change="onUrgency">
-            <view class="pm-filter-input picker">{{ urgencyLabels[urgencyIndex] }}</view>
+            <view class="fb-input picker">{{ urgencyLabels[urgencyIndex] }}</view>
           </picker>
         </view>
 
-        <view v-if="mode !== 'pending'" class="pm-filter-row">
-          <text class="pm-filter-label">曾经状态</text>
+        <view v-if="mode !== 'pending'" class="fb-field">
+          <text class="fb-label">曾经状态</text>
           <picker :range="historyLabels" :value="historyIndex" @change="onHistory">
-            <view class="pm-filter-input picker">{{ historyLabels[historyIndex] }}</view>
+            <view class="fb-input picker">{{ historyLabels[historyIndex] }}</view>
           </picker>
         </view>
 
-        <view v-if="mode === 'list'" class="pm-filter-row">
-          <text class="pm-filter-label">处理部门</text>
+        <view v-if="mode === 'list'" class="fb-field">
+          <text class="fb-label">处理部门</text>
           <picker :range="deptLabels" :value="deptIndex" @change="onDept">
-            <view class="pm-filter-input picker">{{ deptLabels[deptIndex] }}</view>
+            <view class="fb-input picker">{{ deptLabels[deptIndex] }}</view>
           </picker>
         </view>
 
-        <view v-if="mode === 'list'" class="pm-filter-row">
-          <text class="pm-filter-label">处理人</text>
+        <view v-if="mode === 'list'" class="fb-field">
+          <text class="fb-label">处理人</text>
           <picker v-if="canPickHandler" :range="handlerLabels" :value="handlerIndex" @change="onHandler">
-            <view class="pm-filter-input picker">{{ handlerLabels[handlerIndex] }}</view>
+            <view class="fb-input picker">{{ handlerLabels[handlerIndex] }}</view>
           </picker>
-          <view v-else class="pm-filter-input picker disabled">先选处理部门</view>
+          <view v-else class="fb-input picker disabled">先选处理部门</view>
         </view>
 
-        <view v-if="mode !== 'pending'" class="pm-filter-row">
-          <text class="pm-filter-label">期望完成</text>
+        <view v-if="mode !== 'pending'" class="fb-field">
+          <text class="fb-label">期望完成</text>
           <view class="date-range">
             <picker mode="date" :value="dateBegin || today" @change="onDateBegin">
               <view class="dr-item" :class="{ empty: !dateBegin }">{{ dateBegin || '开始日期' }}</view>
@@ -137,12 +135,11 @@
             <text v-if="dateBegin || dateEnd" class="dr-clear" @click="clearDates">清除</text>
           </view>
         </view>
-      </view>
+      </scroll-view>
 
-      <view class="pm-filter-actions">
-        <button size="mini" @click="toggleMore">{{ expanded ? '收起' : '更多' }}</button>
-        <button size="mini" @click="reset">重置</button>
-        <button size="mini" type="primary" class="search-btn" @click="search">搜索</button>
+      <view class="fb-filter-foot">
+        <button class="fb-reset" @click="reset">重置</button>
+        <button class="fb-apply" @click="applyFilter">确定</button>
       </view>
     </view>
 
@@ -154,7 +151,6 @@
       @touchmove="touchMove"
       @touchend="touchEnd"
       @touchcancel="touchEnd"
-      @scroll="onListScroll"
     >
       <view class="pr" :class="{ anim: status !== 'pulling' }" :style="{ height: pullY + 'px' }">
         <view class="pr-box" :style="{ opacity: pullY > 0 ? 1 : 0, transform: 'scale(' + (0.8 + progress * 0.3) + ')' }">
@@ -195,7 +191,17 @@
         @action="(k) => onAction(k, row)"
       />
       <view v-if="!loading && !list.length" class="pm-empty">{{ emptyText }}</view>
-      <view class="pm-load-more">{{ loading ? '加载中' : finished ? '已经看完啦' : '' }}</view>
+
+      <!-- 显式加载更多按钮 + 触底兜底 -->
+      <view class="fb-loadmore">
+        <button
+          v-if="!finished && list.length"
+          class="fb-loadmore-btn"
+          :disabled="loading"
+          @click="loadMore"
+        >{{ loading ? '加载中…' : '加载更多' }}</button>
+        <text v-else-if="finished && list.length" class="fb-loadmore-end">— 已经看完啦 —</text>
+      </view>
       <view class="pm-safe-bottom" />
     </view>
   </view>
@@ -221,7 +227,7 @@ import {
   formatHandlerPair,
   canRespondFeedbackRow
 } from '@/utils/feedbackWorkflow.js'
-import { normalizeDeptList, normalizeUserList } from '@/utils/apiResponse.js'
+import { extractArray, normalizeDeptList, normalizeUserList } from '@/utils/apiResponse.js'
 import { getUrgencyLabel, getUrgencyTone, formatDateOnly } from '@/utils/urgencyDisplay.js'
 import {
   getRespondedTimeText,
@@ -237,7 +243,7 @@ const modes = [
   { label: '全部反馈', value: 'list' }
 ]
 const mode = ref('pending')
-const expanded = ref(false)
+const showFilter = ref(false)
 const list = ref([])
 const loading = ref(false)
 const finished = ref(false)
@@ -271,7 +277,6 @@ const query = reactive({
 /* —— 异常类型 / 问题类型（问题类型联动异常类型，与 PC 一致） —— */
 const abnormalLabels = computed(() => ['全部'].concat(abnormalTypes.map((a) => a.label)))
 const abnormalIndex = ref(0)
-
 const problemOptions = computed(() => (query.abnormalType ? abnormalToProblems[query.abnormalType] || [] : []))
 const problemLabels = computed(() => ['全部'].concat(problemOptions.value.map((p) => p.label)))
 const problemIndex = ref(0)
@@ -310,58 +315,64 @@ const deptIndex = ref(0)
 const handlerUsers = ref([])
 const handlerLabels = computed(() => ['全部'].concat(handlerUsers.value.map((u) => u.nickName || u.userName || '')))
 const handlerIndex = ref(0)
-/** 处理人依赖处理部门，部门未选或部门下无人员时不展开选择器 */
 const canPickHandler = computed(() => deptIndex.value > 0 && handlerLabels.value.length > 1)
+
+/** 筛选入口角标：已选的额外检索条件数量 */
+const activeFilterCount = computed(() => {
+  let n = 0
+  if (query.serialNumber) n++
+  if (query.abnormalType) n++
+  if (query.problemType) n++
+  if (query.urgencyLevel) n++
+  if (query.workflowStatus !== undefined) n++
+  if (query.isClose !== undefined) n++
+  if (query.respondedOverdueOnly || query.processOverdueOnly) n++
+  if (query.mineScope !== 'all') n++
+  if (query.relatedToMe) n++
+  if (query.deptId !== undefined) n++
+  if (query.theFirstHandlerId !== undefined) n++
+  if (dateBegin.value || dateEnd.value) n++
+  return n
+})
 
 function onAbnormal(e) {
   abnormalIndex.value = Number(e.detail.value)
   query.abnormalType = abnormalIndex.value === 0 ? '' : abnormalTypes[abnormalIndex.value - 1].value
-  // 异常类型变更后，问题类型选项与已选值都要重置
   query.problemType = ''
   problemIndex.value = 0
 }
-
 function onProblem(e) {
   problemIndex.value = Number(e.detail.value)
   query.problemType = problemIndex.value === 0 ? '' : problemOptions.value[problemIndex.value - 1].value
 }
-
 function onUrgency(e) {
   urgencyIndex.value = Number(e.detail.value)
   query.urgencyLevel = urgencyIndex.value === 0 ? '' : urgencyLevels[urgencyIndex.value - 1].value
 }
-
 function onStatus(e) {
   statusIndex.value = Number(e.detail.value)
   applyStatusFilter()
 }
-
 function onHistory(e) {
   historyIndex.value = Number(e.detail.value)
   const v = FEEDBACK_HISTORY_STATUS_FILTER_OPTIONS[historyIndex.value].value
   query.respondedOverdueOnly = v === 'responded_overdue' || v === 'both_overdue'
   query.processOverdueOnly = v === 'process_overdue' || v === 'both_overdue'
 }
-
 function onMineScope(e) {
   mineScopeIndex.value = Number(e.detail.value)
-  const map = ['all', 'mentioned', 'created']
-  query.mineScope = map[mineScopeIndex.value]
+  query.mineScope = ['all', 'mentioned', 'created'][mineScopeIndex.value]
 }
-
 function onRelated(e) {
   relatedIndex.value = Number(e.detail.value)
   query.relatedToMe = relatedIndex.value === 1
 }
-
 function onDateBegin(e) {
   dateBegin.value = e.detail.value
 }
-
 function onDateEnd(e) {
   dateEnd.value = e.detail.value
 }
-
 function clearDates() {
   dateBegin.value = ''
   dateEnd.value = ''
@@ -399,16 +410,15 @@ async function loadDepts() {
   }
 }
 
-function toggleMore() {
-  expanded.value = !expanded.value
-  if (expanded.value && mode.value === 'list') loadDepts()
+function toggleFilter() {
+  showFilter.value = !showFilter.value
+  if (showFilter.value && mode.value === 'list') loadDepts()
 }
 
 function onDept(e) {
   deptIndex.value = Number(e.detail.value)
   const d = deptIndex.value > 0 ? deptFlat.value[deptIndex.value - 1] : null
   query.deptId = d ? d.deptId : undefined
-  // 处理人依赖部门，部门变更后清空（与 PC 一致）
   query.theFirstHandlerId = undefined
   handlerIndex.value = 0
   handlerUsers.value = []
@@ -437,7 +447,6 @@ function mapRow(item) {
   const overdue = !!display.overdueType
   const uid = String(getUserId())
 
-  // 操作权限：仅当自己是处理人或负责人才显示响应/处理
   const firstId = String(fb.theFirstHandlerId || fb.TheFirstHandlerId || '')
   const ivId = String(fb.interventionPersonnelId || fb.InterventionPersonnelId || '')
   const canOperate = (firstId && firstId === uid) || (ivId && ivId === uid)
@@ -527,7 +536,7 @@ async function fetchList(reset) {
   try {
     const res = await getProductFeedbackPage(buildParams())
     const data = res.data || {}
-    const rows = (data.result || data.rows || []).map(mapRow)
+    const rows = extractArray(res).map(mapRow)
     total.value = data.totalNum || data.total || 0
     list.value = reset ? rows : list.value.concat(rows)
     if (list.value.length >= total.value || rows.length < pageSize) finished.value = true
@@ -543,12 +552,13 @@ async function fetchList(reset) {
 function switchMode(v) {
   if (mode.value === v) return
   mode.value = v
-  if (v === 'list' && expanded.value) loadDepts()
+  if (v === 'list' && showFilter.value) loadDepts()
   fetchList(true)
 }
 
-function search() {
+function applyFilter() {
   applyStatusFilter()
+  showFilter.value = false
   fetchList(true)
 }
 
@@ -574,7 +584,6 @@ function reset() {
   handlerIndex.value = 0
   handlerUsers.value = []
   clearDates()
-  expanded.value = false
   applyStatusFilter()
   fetchList(true)
 }
@@ -599,10 +608,6 @@ async function onAction(key, row) {
   }
 }
 
-/**
- * 登录账号补偿：历史会话里只存了昵称，而「我创建的」后端是按账号匹配 Create_by，
- * 首次发现缺失时补拉一次用户信息并落盘。
- */
 async function ensureAccount() {
   if (getAccount()) return
   try {
@@ -633,7 +638,6 @@ const { pullY, status, text, progress, touchStart, touchMove, touchEnd } = usePu
     await fetchList(true)
   },
   {
-    // 列表是内层滚动容器，下拉刷新以 listRef.scrollTop 为准
     getScrollTop: () => {
       // #ifdef H5
       return listRef.value ? listRef.value.scrollTop || 0 : 0
@@ -642,29 +646,19 @@ const { pullY, status, text, progress, touchStart, touchMove, touchEnd } = usePu
       return 0
       // #endif
     },
-    // 卡片较高，滚动时容易误触下拉：加大阈值与死区
     threshold: 88,
     deadZone: 18,
     damping: 0.5
   }
 )
 
-function onListScroll(e) {
-  // #ifdef H5
-  const el = e.target
-  if (!el) return
-  const bottom = el.scrollHeight - el.scrollTop - el.clientHeight
-  if (!finished.value && !loading.value && bottom < 80) {
-    fetchList(false)
-  }
-  // #endif
-}
+/* 分页为手动模式：默认加载 20 条，仅「加载更多」按钮触发下一页（不做触底自动加载） */
 </script>
 
 <style lang="scss" scoped>
 @import '@/uni.scss';
 
-/* 页面固定：筛选框不滚动，仅列表滚动 */
+/* 页面固定：筛选/结果栏不滚动，仅列表滚动 */
 .fb-page {
   display: flex;
   flex-direction: column;
@@ -703,40 +697,141 @@ function onListScroll(e) {
   box-shadow: 0 8rpx 20rpx rgba(14, 95, 59, 0.28);
 }
 
-/* 筛选区固定不滚动；条件多时自身可滚动，避免把列表压没 */
-.pm-filter {
+/* 结果条：总数 + 筛选入口 */
+.fb-result-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14rpx 28rpx 12rpx;
   flex-shrink: 0;
-  max-height: 58vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
 }
-.search-btn {
-  background: $pm-primary !important;
-  color: #fff !important;
+.fb-count {
+  font-size: 24rpx;
+  color: $pm-muted;
+  font-weight: 600;
 }
-.picker {
-  line-height: 76rpx;
+.fb-count .num {
+  font-size: 30rpx;
+  color: $pm-primary-deep;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
-.picker.disabled {
+.fb-filter-btn {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 60rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: $pm-surface;
+  color: $pm-primary;
+  border: 1px solid $pm-line;
+  box-shadow: $pm-shadow;
+}
+.fb-filter-ico {
+  width: 28rpx;
+  height: 28rpx;
+  margin-right: 8rpx;
+}
+.fb-filter-txt {
+  font-size: 26rpx;
+  font-weight: 800;
+}
+.fb-filter-badge {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  min-width: 32rpx;
+  height: 32rpx;
+  line-height: 32rpx;
+  padding: 0 6rpx;
+  border-radius: 999rpx;
+  background: $pm-copper;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 800;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* 内联筛选面板：原地下滑，不占列表空间时收起 */
+.fb-filter {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 62vh;
+  background: $pm-bg;
+  border-top: 1px solid $pm-line;
+  border-bottom: 1px solid $pm-line;
+  box-sizing: border-box;
+}
+.fb-filter-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 8rpx 24rpx 16rpx;
+  box-sizing: border-box;
+}
+.fb-field {
+  margin-top: 20rpx;
+}
+.fb-row {
+  display: flex;
+  flex-direction: row;
+  margin-top: 20rpx;
+}
+.fb-col {
+  flex: 1;
+  min-width: 0;
+}
+.fb-col:first-child {
+  margin-right: 16rpx;
+}
+.fb-label {
+  display: block;
+  font-size: 22rpx;
+  color: $pm-muted;
+  font-weight: 700;
+  margin-bottom: 10rpx;
+}
+.fb-input {
+  width: 100%;
+  height: 80rpx;
+  line-height: 80rpx;
+  padding: 0 24rpx;
+  background: $pm-bg-2;
+  border-radius: 24rpx;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  font-size: 26rpx;
+  color: $pm-text;
+}
+.fb-input.picker {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fb-input.picker.disabled {
   color: $pm-muted;
   background: $pm-bg-2;
 }
 
-/* 期望完成时间：开始日期 至 结束日期 */
+/* 期望完成时间 */
 .date-range {
-  flex: 1;
   display: flex;
   flex-direction: row;
   align-items: center;
   min-width: 0;
 }
 .dr-item {
-  height: 76rpx;
-  line-height: 76rpx;
+  height: 80rpx;
+  line-height: 80rpx;
   padding: 0 20rpx;
-  border-radius: 999rpx;
-  background: $pm-bg;
+  border-radius: 24rpx;
+  background: $pm-bg-2;
   font-size: 24rpx;
   color: $pm-text;
   text-align: center;
@@ -760,6 +855,39 @@ function onListScroll(e) {
   font-weight: 700;
 }
 
+.fb-filter-foot {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20rpx;
+  padding: 16rpx 24rpx calc(16rpx + var(--window-bottom, 0px));
+  border-top: 1px solid $pm-line;
+  background: $pm-surface;
+  flex-shrink: 0;
+}
+.fb-reset {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 999rpx;
+  background: $pm-bg-2;
+  color: $pm-text-secondary;
+  font-size: 28rpx;
+  font-weight: 800;
+  border: 1px solid $pm-line;
+}
+.fb-apply {
+  flex: 2;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 999rpx;
+  background: $pm-primary;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 800;
+  box-shadow: 0 10rpx 24rpx rgba(14, 95, 59, 0.3);
+}
+
 /* —— 列表：唯一滚动区域 —— */
 .fb-list {
   flex: 1;
@@ -769,7 +897,7 @@ function onListScroll(e) {
   overscroll-behavior-y: contain;
   display: flex;
   flex-direction: column;
-  padding: 16rpx 24rpx 0;
+  padding: 8rpx 24rpx 0;
 }
 .fb-list > * {
   flex-shrink: 0;
@@ -781,6 +909,38 @@ function onListScroll(e) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+
+/* 加载更多 */
+.fb-loadmore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx 0 12rpx;
+}
+.fb-loadmore-btn {
+  min-width: 320rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  padding: 0 40rpx;
+  border-radius: 999rpx;
+  background: $pm-surface;
+  color: $pm-primary;
+  font-size: 26rpx;
+  font-weight: 800;
+  border: 1px solid $pm-primary;
+  box-shadow: $pm-shadow;
+}
+.fb-loadmore-btn[disabled] {
+  opacity: 0.55;
+  color: $pm-muted;
+  border-color: $pm-line;
+  box-shadow: none;
+}
+.fb-loadmore-end {
+  font-size: 22rpx;
+  color: $pm-muted;
+  font-weight: 600;
 }
 
 /* —— 自定义下拉刷新 —— */
