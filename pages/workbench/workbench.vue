@@ -25,6 +25,8 @@
     <view class="wb-body">
       <app-nav-bar title="工作台" :show-back="false" />
 
+    <!-- 可折叠头部：下滑列表时 Hero 卡与快捷瓷贴收起，把空间让给列表 -->
+    <view class="wb-head" :class="{ collapsed }">
     <!-- 问候栏(WB-01) -->
     <view class="gbar">
       <view class="gavatar">{{ avatarLetter }}</view>
@@ -103,6 +105,7 @@
     <view class="toolbar">
       <text class="toolbar-title">{{ currentTypeLabel }}</text>
     </view>
+    </view><!-- /wb-head -->
 
     <view class="pm-list" ref="listRef">
       <feedback-card
@@ -143,7 +146,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { usePullRefresh } from '@/composables/usePullRefresh.js'
 import { ensureLoggedIn } from '@/utils/authGuard.js'
@@ -163,6 +166,8 @@ const scopes = WORKBENCH_SCOPES
 const workbenchType = ref('pending')
 // 数据范围：dept 部门维度 / mine 我的维度
 const scope = ref('mine')
+// 折叠头部：下滑列表时收起 Hero 卡与快捷瓷贴，给列表让出空间
+const collapsed = ref(false)
 
 function setScope(key) {
   if (scope.value === key) return
@@ -317,6 +322,11 @@ async function fetchList(reset) {
     pageNum.value = 1
     finished.value = false
     list.value = []
+    collapsed.value = false
+    // 重渲染后把列表滚回顶部，使折叠状态与滚动位置一致（展开头部 + 列表置顶）
+    nextTick(() => {
+      if (listRef.value) listRef.value.scrollTop = 0
+    })
   }
   if (finished.value) return
   loading.value = true
@@ -387,10 +397,30 @@ onShow(() => {
   fetchList(true)
 })
 
-function onListScroll() {
-  if (!listRef.value) return
-  const el = listRef.value
-  const bottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 80
+// H5 下 view 组件不会把内部 div 的 scroll 事件透传出来，
+// 因此折叠头部需要在 onMounted 里直接拿到 .pm-list 的真实 DOM 监听滚动
+// #ifdef H5
+let scrollEl = null
+// #endif
+
+function getScrollContainer() {
+  // #ifdef H5
+  return scrollEl || document.querySelector('.pm-list') || (listRef.value && listRef.value.$el) || listRef.value
+  // #endif
+  // #ifndef H5
+  return listRef.value
+  // #endif
+}
+
+function onListScroll(e) {
+  // 优先用原生事件对象 target（手动 addEventListener 触发时 e.target 就是真实 DOM）
+  const el = (e && e.target) || getScrollContainer()
+  if (!el) return
+  // 滞回折叠：滑过阈值收起、回顶展开，避免在临界点反复抖动
+  const top = el.scrollTop || 0
+  if (top > 48 && !collapsed.value) collapsed.value = true
+  else if (top < 8 && collapsed.value) collapsed.value = false
+  const bottom = top + el.clientHeight >= el.scrollHeight - 80
   if (bottom && !finished.value && !loading.value) {
     fetchList(false)
   }
@@ -398,13 +428,24 @@ function onListScroll() {
 
 onMounted(() => {
   // #ifdef H5
-  if (listRef.value) listRef.value.addEventListener('scroll', onListScroll)
+  const bindScroll = () => {
+    scrollEl = document.querySelector('.pm-list') || (listRef.value && listRef.value.$el) || listRef.value
+    if (scrollEl && typeof scrollEl.addEventListener === 'function') {
+      scrollEl.addEventListener('scroll', onListScroll, { passive: true })
+    }
+  }
+  nextTick(bindScroll)
+  // 部分情况下 DOM 还没挂载到 document，再晚 100ms 兜底取一次
+  setTimeout(bindScroll, 100)
   // #endif
 })
 
 onUnmounted(() => {
   // #ifdef H5
-  if (listRef.value) listRef.value.removeEventListener('scroll', onListScroll)
+  if (scrollEl && typeof scrollEl.removeEventListener === 'function') {
+    scrollEl.removeEventListener('scroll', onListScroll)
+  }
+  scrollEl = null
   // #endif
 })
 
@@ -417,7 +458,8 @@ const { pullY, status, text, progress, touchStart, touchMove, touchEnd } = usePu
     // 列表是内层滚动容器，下拉刷新以 listRef.scrollTop 为准，避免误判为"一直在顶部"
     getScrollTop: () => {
       // #ifdef H5
-      return listRef.value ? listRef.value.scrollTop || 0 : 0
+      const el = getScrollContainer()
+      return el ? el.scrollTop || 0 : 0
       // #endif
       // #ifndef H5
       return 0
@@ -604,6 +646,8 @@ onReachBottom(() => fetchList(false))
   box-shadow: $pm-shadow-lg;
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
+  max-height: 460rpx;
 }
 .deco {
   position: absolute;
@@ -697,6 +741,8 @@ onReachBottom(() => fetchList(false))
   display: flex;
   flex-direction: row;
   margin: 16rpx 16rpx 0;
+  box-sizing: border-box;
+  max-height: 360rpx;
 }
 .q {
   flex: 1;
@@ -765,7 +811,7 @@ onReachBottom(() => fetchList(false))
 .seg {
   display: flex;
   flex-direction: row;
-  padding: 8rpx 24rpx;
+  padding: 4rpx 24rpx;
 }
 .seg-item {
   flex: 1;
@@ -822,6 +868,59 @@ onReachBottom(() => fetchList(false))
   padding: 8rpx 18rpx;
   background: $pm-warn-soft;
   border-radius: 999rpx;
+}
+
+/* —— 可折叠头部：下滑列表时收起 Hero 与快捷瓷贴，把空间让给列表 —— */
+.wb-head {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+.hero-card,
+.quick {
+  transition:
+    max-height 0.3s $pm-press-ease,
+    opacity 0.24s ease,
+    margin-top 0.3s $pm-press-ease,
+    transform 0.3s $pm-press-ease;
+  overflow: hidden;
+}
+.wb-head.collapsed .hero-card,
+.wb-head.collapsed .quick {
+  max-height: 0;
+  min-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  transform: translateY(-16rpx);
+  pointer-events: none;
+}
+/* 折叠后让头部压成一行紧凑态：只剩头像+问候+范围切换，分类 tab 像常驻筛选条 */
+.wb-head.collapsed .gbar {
+  margin-bottom: 2rpx;
+  padding-top: 4rpx;
+  padding-bottom: 4rpx;
+}
+.wb-head.collapsed .gavatar {
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  font-size: 24rpx;
+  margin-right: 14rpx;
+}
+.wb-head.collapsed .gdate {
+  display: none;
+}
+.wb-head.collapsed .ghello {
+  font-size: 28rpx;
+}
+.wb-head.collapsed .scope-switch {
+  transform: scale(0.92);
+  transform-origin: right center;
+}
+.wb-head.collapsed .seg {
+  margin-top: 0;
+  padding-top: 2rpx;
+  padding-bottom: 2rpx;
 }
 
 /* —— 列表：唯一滚动区域 —— */
