@@ -889,6 +889,9 @@ onReachBottom(() => fetchList(false))
 .wb-head.collapsed .quick {
   max-height: 0;
   min-height: 0;
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
   opacity: 0;
   margin-top: 0;
   transform: translateY(-16rpx);
@@ -918,7 +921,7 @@ onReachBottom(() => fetchList(false))
   transform-origin: right center;
 }
 .wb-head.collapsed .seg {
-  margin-top: 0;
+  margin-top: 4rpx;
   padding-top: 2rpx;
   padding-bottom: 2rpx;
 }
