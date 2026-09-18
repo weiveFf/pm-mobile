@@ -17,7 +17,7 @@
         </view>
         <view class="hero-meta">
           <text class="hero-sub">{{ fb.deptName || '—' }} · {{ handler }}</text>
-          <text class="hero-sub">{{ fb.createByNickName || fb.create_by || '—' }} · {{ fb.create_time || fb.createTime || '' }}</text>
+          <text class="hero-sub">{{ fb.createByNickName || fb.createNickName || fb.create_by || '—' }} · {{ fb.create_time || fb.createTime || '' }}</text>
         </view>
       </view>
 
@@ -43,26 +43,70 @@
       <view v-show="activeTab === '问题描述'" class="panel body rich-body" v-html="problemHtml || '<p>暂无描述</p>'" @click="onRichClick($event, problemHtml)"></view>
       <view v-show="activeTab === '处理要求'" class="panel body rich-body" v-html="demandHtml || '<p>暂无要求</p>'" @click="onRichClick($event, demandHtml)"></view>
 
-      <view v-show="activeTab === '评论'" class="panel">
-        <view v-for="c in commentViews" :key="c.id" class="bubble-row" :class="{ me: c.mine }">
-          <view class="bubble">
-            <view class="bubble-top">
-              <text class="who">{{ c.name }}</text>
-              <text class="when">{{ c.time }}</text>
-            </view>
-            <view
-              v-if="c.isHtml"
-              class="what rich-body-inline"
-              v-html="c.html"
-              @click="onRichClick($event, c.html)"
-            ></view>
-            <text v-else class="what">{{ c.text }}</text>
+      <!-- 悬浮评论入口：点击弹出独立评论浮层 -->
+      <view class="fab pressable" @click="openComments">
+        <svg class="fab-ic" viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z" fill="currentColor" /></svg>
+        <text v-if="commentViews.length" class="fab-badge">{{ commentViews.length }}</text>
+      </view>
+
+      <!-- 评论浮层：底部弹出 -->
+      <view class="cm-mask" :class="{ show: showComments }" @click="closeComments" />
+      <view class="cm-sheet" :class="{ show: showComments }">
+        <view class="cm-head">
+          <view class="cm-head-left">
+            <text class="cm-title">评论</text>
+            <text v-if="commentViews.length" class="cm-count">{{ commentViews.length }}</text>
           </view>
+          <text class="cm-close" @click="closeComments">✕</text>
         </view>
-        <view v-if="!commentViews.length" class="nil">来聊一句吧</view>
-        <view class="composer">
-          <input v-model="commentText" class="composer-input" placeholder="写评论…" />
-          <view class="composer-send pressable" @click="sendComment">{{ commenting ? '…' : '发送' }}</view>
+
+        <scroll-view class="cm-list" scroll-y :scroll-into-view="cmIntoView" :show-scrollbar="false">
+          <view v-for="c in commentViews" :key="c.id" class="cm-item" :class="{ me: c.mine }">
+            <view class="cm-avatar" :style="{ background: c.avatarBg }">{{ c.avatarChar }}</view>
+            <view class="cm-body">
+              <view class="cm-meta">
+                <text class="cm-name">{{ c.name }}</text>
+                <text class="cm-time">{{ c.time }}</text>
+              </view>
+              <view class="cm-bubble">
+                <view class="cm-rich" v-html="c.html" @click="onRichClick($event, c.html)"></view>
+              </view>
+            </view>
+          </view>
+          <view v-if="!commentViews.length" class="cm-nil">还没有评论，来说一句吧</view>
+          <view id="cm-bottom-anchor" class="cm-anchor" />
+        </scroll-view>
+
+        <view class="cm-composer-wrap">
+          <!-- @ 提及候选 -->
+          <view v-if="mentionOpen" class="cm-mention">
+            <view v-if="!mentionList.length" class="cm-mention-empty">无匹配同事</view>
+            <scroll-view v-else scroll-y class="cm-mention-list">
+              <view
+                v-for="u in mentionList"
+                :key="u.userId"
+                class="cm-mention-item"
+                @click="pickMention(u)"
+              >
+                <text class="cm-mention-name">{{ u.nickName || u.userName }}</text>
+                <text v-if="u.deptName" class="cm-mention-dept">{{ u.deptName }}</text>
+              </view>
+            </scroll-view>
+          </view>
+
+          <view class="cm-composer">
+            <text class="cm-at-btn pressable" @click="openMention">@</text>
+            <textarea
+              class="cm-input"
+              :value="commentText"
+              placeholder="写评论，输入 @ 提及同事…"
+              :auto-height="false"
+              confirm-type="send"
+              @input="onCommentInput"
+              @confirm="sendComment"
+            />
+            <view class="cm-send pressable" @click="sendComment">{{ commenting ? '…' : '发送' }}</view>
+          </view>
         </view>
       </view>
 
@@ -113,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getUserId, getAccount, getIsDeptLeader, getIsFirstContact, getBaseURL } from '@/utils/auth.js'
 import {
@@ -124,7 +168,7 @@ import {
   closeProductFeedbackList,
   withdrawProductFeedbackList
 } from '@/api/after-sales.js'
-import { listDept } from '@/api/system.js'
+import { listDept, listUser } from '@/api/system.js'
 import {
   resolveFeedbackWorkflowDisplay,
   formatHandlerPair,
@@ -136,8 +180,8 @@ import { getUrgencyLabel, formatDateOnly } from '@/utils/urgencyDisplay.js'
 import { splitFeedbackLogContent } from '@/utils/feedbackLogDisplay.js'
 import { afterSalesExtFields, hasAfterSalesExtData, deserializeAfterSalesExt } from '@/utils/afterSalesExt.js'
 import { FEEDBACK_WORKFLOW_STATUS } from '@/constants/feedbackWorkflow.js'
-import { extractArray, normalizeDeptList } from '@/utils/apiResponse.js'
-import { fixRichTextImageUrls, extractImageSrcs } from '@/utils/richText.js'
+import { extractArray, normalizeDeptList, normalizeUserList } from '@/utils/apiResponse.js'
+import { fixRichTextImageUrls, extractImageSrcs, escapeHtml } from '@/utils/richText.js'
 
 const id = ref('')
 const loading = ref(false)
@@ -146,7 +190,7 @@ const processList = ref([])
 const logs = ref([])
 const comments = ref([])
 const activeTab = ref('问题描述')
-const tabs = ['问题描述', '处理要求', '评论', '操作记录']
+const tabs = ['问题描述', '处理要求', '操作记录']
 const commentText = ref('')
 const commenting = ref(false)
 const statusLabel = ref('-')
@@ -191,17 +235,157 @@ function rich(html) {
   return fixRichTextImageUrls(html, baseURL)
 }
 
+const AVATAR_COLORS = ['#0E5F3B', '#B8744A', '#3F6CB0', '#C2872A', '#8E5BA6', '#3D805E', '#C0504D', '#4A7C8C']
+
+function avatarChar(name) {
+  const s = String(name || '用').trim()
+  return s ? s.charAt(0).toUpperCase() : '用'
+}
+function avatarColor(name) {
+  const s = String(name || '')
+  let hash = 0
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
+/** 评论内容渲染：富文本原样；纯文本转义后换行 + 高亮 @昵称 */
+function renderCommentContent(content) {
+  const raw = String(content || '')
+  if (isHtml(raw)) return rich(raw)
+  return escapeHtml(raw)
+    .replace(/\n/g, '<br/>')
+    .replace(/@([^\s@<]+)/g, '<span class="cm-at">@$1</span>')
+}
+
 const commentViews = computed(() =>
-  (comments.value || []).map((c) => ({
-    id: c.id,
-    name: c.createByNickName || c.create_by || '用户',
-    time: c.create_time || c.createTime || '',
-    mine: isMine(c),
-    isHtml: isHtml(c.content),
-    html: rich(c.content),
-    text: String(c.content || '')
-  }))
+  (comments.value || []).map((c) => {
+    // PC 端评论人字段是 createNickName / create_by；此前误用 createByNickName 导致显示「用户」
+    const name =
+      c.createNickName || c.CreateNickName || c.createByNickName || c.create_by || c.Create_by || '用户'
+    return {
+      id: c.id,
+      name,
+      avatarChar: avatarChar(name),
+      avatarBg: avatarColor(name),
+      time: c.create_time || c.createTime || '',
+      mine: isMine(c),
+      html: renderCommentContent(c.content)
+    }
+  })
 )
+
+/* —— 悬浮评论浮层 —— */
+const showComments = ref(false)
+const cmIntoView = ref('')
+
+function openComments() {
+  showComments.value = true
+  nextTick(() => {
+    cmIntoView.value = 'cm-bottom-anchor'
+  })
+}
+function closeComments() {
+  showComments.value = false
+  cmIntoView.value = ''
+  mentionOpen.value = false
+}
+
+/* —— @ 提及（与 PC 一致：输入 @ 弹出成员，选中插入 @昵称，提交带 mentionUserIds） —— */
+const mentionUsers = ref([])
+const mentionLoaded = ref(false)
+const mentionOpen = ref(false)
+const mentionQuery = ref('')
+const mentionStart = ref(-1)
+const mentionCursor = ref(-1)
+const mentionUserIds = ref([])
+
+const mentionList = computed(() => {
+  const me = String(getUserId() || '')
+  const list = (mentionUsers.value || []).filter((u) => {
+    const uid = String(u.userId || '')
+    const uname = String(u.userName || '').toLowerCase()
+    return uid && uid !== me && uid !== '1' && uname !== 'admin'
+  })
+  const q = String(mentionQuery.value || '').toLowerCase()
+  if (!q) return list.slice(0, 30)
+  return list
+    .filter((u) => String(u.nickName || u.userName || '').toLowerCase().includes(q))
+    .slice(0, 30)
+})
+
+async function ensureMentionUsers() {
+  if (mentionLoaded.value) return
+  try {
+    const res = await listUser({ pageNum: 1, pageSize: 500, status: '0', delFlag: '0' })
+    mentionUsers.value = normalizeUserList(res)
+    mentionLoaded.value = true
+  } catch (e) {
+    /* 拉取失败则候选为空 */
+  }
+}
+
+function onCommentInput(e) {
+  const val = (e && e.detail && e.detail.value) || ''
+  commentText.value = val
+  const cursor = e && e.detail && e.detail.cursor != null ? e.detail.cursor : val.length
+  const before = val.slice(0, cursor)
+  const at = before.lastIndexOf('@')
+  if (at < 0) {
+    mentionOpen.value = false
+    return
+  }
+  const seg = before.slice(at + 1)
+  if (/[\s@]/.test(seg)) {
+    mentionOpen.value = false
+    return
+  }
+  mentionStart.value = at
+  mentionCursor.value = cursor
+  mentionQuery.value = seg
+  mentionOpen.value = true
+  ensureMentionUsers()
+}
+
+/** 通过「@」按钮唤起候选（插到光标/末尾） */
+function openMention() {
+  ensureMentionUsers()
+  const val = String(commentText.value || '')
+  mentionStart.value = val.length
+  mentionCursor.value = val.length
+  mentionQuery.value = ''
+  mentionOpen.value = !mentionOpen.value
+}
+
+function pickMention(u) {
+  const name = (u && (u.nickName || u.userName)) || ''
+  if (!name) return
+  const val = String(commentText.value || '')
+  const start = mentionStart.value >= 0 ? mentionStart.value : val.length
+  const cursor = mentionCursor.value >= 0 ? mentionCursor.value : val.length
+  const insert = '@' + name + ' '
+  commentText.value = val.slice(0, start) + insert + val.slice(cursor)
+  if (u.userId != null && !mentionUserIds.value.includes(u.userId)) {
+    mentionUserIds.value.push(u.userId)
+  }
+  mentionOpen.value = false
+  mentionStart.value = -1
+  mentionCursor.value = -1
+  mentionQuery.value = ''
+}
+
+/** 从文本里回捞 @ 到的成员 ID（与 PC collectMentionIdsFromContent 一致） */
+function collectMentionIds(text) {
+  const t = String(text || '')
+  const ids = []
+  ;(mentionUsers.value || []).forEach((u) => {
+    const name = u.nickName || u.userName || ''
+    if (name && t.includes('@' + name) && !ids.includes(u.userId)) ids.push(u.userId)
+  })
+  mentionUserIds.value.forEach((id) => {
+    if (!ids.includes(id)) ids.push(id)
+  })
+  return ids
+}
 
 const logViews = computed(() =>
   (logs.value || []).map((log) => {
@@ -225,11 +409,14 @@ function onRichClick(e, html) {
   uni.previewImage({ current: target.src, urls })
 }
 
-/** 自己的评论靠右(聊天气泡) */
+/** 自己的评论靠右(聊天气泡)：评论 Create_by 也是登录账号，账号优先、userId 兜底 */
 function isMine(c) {
-  const u = String(getUserId() || '')
-  if (!u) return false
-  return String(c.create_by || c.createBy || '') === u
+  const by = String(c.create_by || c.Create_by || c.createBy || '')
+  if (!by) return false
+  const acc = String(getAccount() || '')
+  if (acc && by === acc) return true
+  const uid = String(getUserId() || '')
+  return !!uid && by === uid
 }
 
 /* —— 权限：与 PC 端 FeedbackDetailsTabDialog 对齐 —— */
@@ -415,8 +602,11 @@ async function sendComment() {
   if (!commentText.value.trim()) return
   commenting.value = true
   try {
-    await addFeedbackComment(id.value, { content: commentText.value.trim() })
+    const content = commentText.value.trim()
+    await addFeedbackComment(id.value, { content, mentionUserIds: collectMentionIds(content) })
     commentText.value = ''
+    mentionUserIds.value = []
+    mentionOpen.value = false
     const cRes = await getFeedbackComments(id.value)
     comments.value = extractArray(cRes)
   } catch (e) {
@@ -675,7 +865,7 @@ onShow(() => {
 
 /* 富文本内的图片（问题描述/处理要求/评论/操作记录留言通用） */
 .rich-body img,
-.rich-body-inline img,
+.cm-rich img,
 .log-remark-body img {
   display: block;
   max-width: 100%;
@@ -683,94 +873,298 @@ onShow(() => {
   margin: 12rpx 0;
   border-radius: 12rpx;
 }
-.rich-body-inline p,
+.cm-rich p,
 .log-remark-body p {
   margin: 0 0 8rpx;
   line-height: 1.6;
 }
-.rich-body-inline p:last-child,
+.cm-rich p:last-child,
 .log-remark-body p:last-child {
   margin-bottom: 0;
 }
 
-/* —— 评论气泡 —— */
-.bubble-row {
+/* —— 悬浮评论入口（FAB） —— */
+.fab {
+  position: fixed;
+  right: 32rpx;
+  bottom: calc(140rpx + constant(safe-area-inset-bottom));
+  bottom: calc(140rpx + env(safe-area-inset-bottom));
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: $pm-grad-brand;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 16rpx 32rpx -8rpx rgba(14, 95, 59, 0.5);
+  z-index: 60;
+}
+.fab-ic {
+  width: 46rpx;
+  height: 46rpx;
+}
+.fab-badge {
+  position: absolute;
+  top: -6rpx;
+  right: -6rpx;
+  min-width: 34rpx;
+  height: 34rpx;
+  line-height: 34rpx;
+  padding: 0 8rpx;
+  border-radius: 999rpx;
+  background: $pm-copper;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 800;
+  text-align: center;
+  box-sizing: border-box;
+  border: 3rpx solid $pm-bg;
+}
+
+/* —— 评论浮层（底部弹出） —— */
+.cm-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 30, 24, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.26s ease, visibility 0.26s ease;
+  z-index: 70;
+}
+.cm-mask.show {
+  opacity: 1;
+  visibility: visible;
+}
+.cm-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: $pm-bg;
+  border-radius: 32rpx 32rpx 0 0;
+  transform: translateY(100%);
+  transition: transform 0.3s $pm-press-ease;
+  z-index: 71;
+  box-sizing: border-box;
+}
+.cm-sheet.show {
+  transform: translateY(0);
+}
+.cm-head {
+  flex-shrink: 0;
   display: flex;
   flex-direction: row;
-  margin-bottom: 18rpx;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 32rpx 20rpx;
+  border-bottom: 1px solid $pm-line;
 }
-.bubble-row.me {
+.cm-head-left {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.cm-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: $pm-text;
+}
+.cm-count {
+  margin-left: 12rpx;
+  min-width: 36rpx;
+  height: 36rpx;
+  line-height: 36rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  background: $pm-accent;
+  color: $pm-primary-deep;
+  font-size: 22rpx;
+  font-weight: 800;
+  text-align: center;
+  box-sizing: border-box;
+}
+.cm-close {
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: $pm-bg-2;
+  color: $pm-text-secondary;
+  font-size: 26rpx;
+}
+.cm-list {
+  flex: 1;
+  min-height: 0;
+  padding: 20rpx 24rpx 0;
+  box-sizing: border-box;
+}
+.cm-item {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  margin-bottom: 24rpx;
+}
+.cm-item.me {
   flex-direction: row-reverse;
 }
-.bubble {
-  max-width: 78%;
-  background: $pm-bg-2;
-  border-radius: 22rpx;
-  border-bottom-left-radius: 6rpx;
-  padding: 18rpx 22rpx;
+.cm-avatar {
+  flex-shrink: 0;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 800;
+  text-align: center;
+  line-height: 64rpx;
 }
-.bubble-row.me .bubble {
-  background: $pm-primary;
-  border-bottom-left-radius: 22rpx;
-  border-bottom-right-radius: 6rpx;
+.cm-body {
+  flex: 1;
+  min-width: 0;
+  margin: 0 16rpx;
+  display: flex;
+  flex-direction: column;
 }
-.bubble-top {
+.cm-item.me .cm-body {
+  align-items: flex-end;
+}
+.cm-meta {
   display: flex;
   flex-direction: row;
-  justify-content: space-between;
+  align-items: baseline;
   margin-bottom: 8rpx;
 }
-.who {
+.cm-item.me .cm-meta {
+  flex-direction: row-reverse;
+}
+.cm-name {
   font-size: 24rpx;
   font-weight: 750;
   color: $pm-text;
 }
-.bubble-row.me .who {
-  color: rgba(255, 255, 255, 0.85);
-}
-.when {
-  display: block;
+.cm-time {
   font-size: 20rpx;
   color: $pm-muted;
-  margin-left: 12rpx;
+  margin: 0 12rpx;
 }
-.bubble-row.me .when {
-  color: rgba(255, 255, 255, 0.7);
+.cm-bubble {
+  max-width: 100%;
+  padding: 18rpx 24rpx;
+  background: $pm-surface;
+  border-radius: 6rpx 22rpx 22rpx 22rpx;
+  box-shadow: $pm-shadow;
 }
-.what {
-  display: block;
-  font-size: 26rpx;
+.cm-item.me .cm-bubble {
+  background: $pm-primary;
+  border-radius: 22rpx 6rpx 22rpx 22rpx;
+}
+.cm-text,
+.cm-rich {
+  font-size: 27rpx;
   color: $pm-text;
   line-height: 1.55;
-  word-break: break-all;
+  word-break: break-word;
 }
-.bubble-row.me .what,
-.bubble-row.me .rich-body-inline {
+.cm-item.me .cm-text,
+.cm-item.me .cm-rich {
   color: #fff;
 }
-.nil {
-  padding: 36rpx 0;
+.cm-nil {
+  padding: 60rpx 0;
   text-align: center;
   color: $pm-muted;
   font-size: 24rpx;
 }
-.composer {
+.cm-anchor {
+  height: 8rpx;
+}
+.cm-composer-wrap {
+  position: relative;
+  flex-shrink: 0;
+  border-top: 1px solid $pm-line;
+  background: $pm-surface;
+}
+.cm-mention {
+  position: absolute;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: calc(100% + 8rpx);
+  max-height: 420rpx;
+  background: $pm-surface;
+  border-radius: 20rpx;
+  box-shadow: $pm-shadow-lg;
+  overflow: hidden;
+  z-index: 5;
+}
+.cm-mention-list {
+  max-height: 420rpx;
+}
+.cm-mention-item {
   display: flex;
   flex-direction: row;
   align-items: center;
-  margin-top: 20rpx;
+  justify-content: space-between;
+  padding: 20rpx 24rpx;
+  border-bottom: 1px solid $pm-line;
 }
-.composer-input {
+.cm-mention-item:last-child {
+  border-bottom: none;
+}
+.cm-mention-name {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: $pm-text;
+}
+.cm-mention-dept {
+  font-size: 22rpx;
+  color: $pm-muted;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-mention-empty {
+  padding: 28rpx;
+  text-align: center;
+  color: $pm-muted;
+  font-size: 24rpx;
+}
+.cm-at-btn {
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: $pm-bg-2;
+  color: $pm-primary;
+  font-size: 34rpx;
+  font-weight: 800;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+.cm-composer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 16rpx 24rpx calc(16rpx + constant(safe-area-inset-bottom));
+  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+}
+.cm-input {
   flex: 1;
   height: 76rpx;
   padding: 0 28rpx;
-  background: $pm-bg;
+  background: $pm-bg-2;
   border-radius: 999rpx;
   font-size: 26rpx;
 }
-.composer-send {
+.cm-send {
   margin-left: 16rpx;
-  padding: 0 28rpx;
+  padding: 0 32rpx;
   height: 76rpx;
   line-height: 76rpx;
   border-radius: 999rpx;
@@ -778,6 +1172,13 @@ onShow(() => {
   color: #fff;
   font-size: 26rpx;
   font-weight: 750;
+  flex-shrink: 0;
+}
+.nil {
+  padding: 36rpx 0;
+  text-align: center;
+  color: $pm-muted;
+  font-size: 24rpx;
 }
 
 /* —— 操作记录：时间线 —— */
@@ -906,12 +1307,33 @@ onShow(() => {
 <style lang="scss">
 @import '@/uni.scss';
 
-/* v-html 渲染的富文本图片全局样式，确保不撑出屏幕 */
-.rich-body img {
+/* v-html 渲染的富文本图片全局样式，确保不撑出屏幕（v-html 内容不带 scoped 属性，须放全局） */
+.rich-body img,
+.cm-rich img,
+.log-remark-body img {
   display: block;
   max-width: 100%;
   height: auto;
   margin: 12rpx 0;
   border-radius: 12rpx;
+}
+.cm-rich p,
+.log-remark-body p {
+  margin: 0 0 8rpx;
+  line-height: 1.6;
+}
+.cm-rich p:last-child,
+.log-remark-body p:last-child {
+  margin-bottom: 0;
+}
+/* 评论里的 @昵称 高亮 */
+.cm-rich .cm-at {
+  color: #0E5F3B;
+  font-weight: 700;
+}
+.cm-item.me .cm-rich,
+.cm-item.me .cm-rich p,
+.cm-item.me .cm-rich .cm-at {
+  color: #fff;
 }
 </style>
