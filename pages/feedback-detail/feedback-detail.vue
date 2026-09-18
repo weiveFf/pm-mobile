@@ -67,9 +67,14 @@
               <view class="cm-meta">
                 <text class="cm-name">{{ c.name }}</text>
                 <text class="cm-time">{{ c.time }}</text>
+                <text class="cm-quote-btn" @click.stop="quoteComment(c)">引用</text>
               </view>
               <view class="cm-bubble">
-                <view class="cm-rich" v-html="c.html" @click="onRichClick($event, c.html)"></view>
+                <view v-if="c.quoteName" class="cm-quote">
+                  <text class="cm-quote-name">引用 {{ c.quoteName }}</text>
+                  <view class="cm-quote-body" v-html="c.quoteHtml"></view>
+                </view>
+                <view v-if="c.html" class="cm-rich" v-html="c.html" @click="onRichClick($event, c.html)"></view>
               </view>
             </view>
           </view>
@@ -92,6 +97,15 @@
                 <text v-if="u.deptName" class="cm-mention-dept">{{ u.deptName }}</text>
               </view>
             </scroll-view>
+          </view>
+
+          <!-- 引用草稿 -->
+          <view v-if="quoteTarget" class="cm-quote-draft">
+            <view class="cm-quote-draft-main">
+              <text class="cm-quote-draft-label">引用 {{ quoteTarget.name }}</text>
+              <text class="cm-quote-draft-text">{{ quoteTarget.text }}</text>
+            </view>
+            <text class="cm-quote-draft-clear" @click="clearQuote">✕</text>
           </view>
 
           <view class="cm-composer">
@@ -273,11 +287,20 @@ function renderCommentContent(content) {
     .replace(/@([^\s@<]+)/g, '<span class="cm-at">@$1</span>')
 }
 
+/** 解析引用格式：「引用 昵称」\n原文\n\n回复（与 PC parseQuotedContent 一致） */
+function parseQuotedContent(text) {
+  const raw = String(text || '')
+  const m = raw.match(/^「引用\s+(.+?)」\n([\s\S]*?)(?:\n\n([\s\S]*))?$/)
+  if (!m) return { quoteName: '', quoteBody: '', body: raw }
+  return { quoteName: m[1] || '', quoteBody: m[2] || '', body: m[3] || '' }
+}
+
 const commentViews = computed(() =>
   (comments.value || []).map((c) => {
     // PC 端评论人字段是 createNickName / create_by；此前误用 createByNickName 导致显示「用户」
     const name =
       c.createNickName || c.CreateNickName || c.createByNickName || c.create_by || c.Create_by || '用户'
+    const parts = parseQuotedContent(c.content)
     return {
       id: c.id,
       name,
@@ -285,7 +308,10 @@ const commentViews = computed(() =>
       avatarBg: avatarColor(name),
       time: c.create_time || c.createTime || '',
       mine: isMine(c),
-      html: renderCommentContent(c.content)
+      quoteName: parts.quoteName,
+      quoteHtml: parts.quoteBody ? renderCommentContent(parts.quoteBody) : '',
+      html: parts.quoteName ? renderCommentContent(parts.body) : renderCommentContent(c.content),
+      rawText: parts.body || parts.quoteBody || String(c.content || '')
     }
   })
 )
@@ -401,6 +427,20 @@ function collectMentionIds(text) {
     if (!ids.includes(id)) ids.push(id)
   })
   return ids
+}
+
+/* —— 引用评论（与 PC 一致：「引用 昵称」+ 原文 + 回复） —— */
+const quoteTarget = ref(null)
+
+function quoteComment(c) {
+  const text = String((c && c.rawText) || '').trim() || '[图片]'
+  quoteTarget.value = {
+    name: (c && c.name) || '用户',
+    text: text.length > 200 ? text.slice(0, 200) + '…' : text
+  }
+}
+function clearQuote() {
+  quoteTarget.value = null
 }
 
 const logViews = computed(() =>
@@ -690,12 +730,16 @@ async function load() {
 }
 
 async function sendComment() {
-  if (!commentText.value.trim()) return
+  const body = commentText.value.trim()
+  if (!body && !quoteTarget.value) return
   commenting.value = true
   try {
-    const content = commentText.value.trim()
+    const content = quoteTarget.value
+      ? `「引用 ${quoteTarget.value.name}」\n${quoteTarget.value.text}\n\n${body}`
+      : body
     await addFeedbackComment(id.value, { content, mentionUserIds: collectMentionIds(content) })
     commentText.value = ''
+    quoteTarget.value = null
     mentionUserIds.value = []
     mentionOpen.value = false
     const cRes = await getFeedbackComments(id.value)
@@ -1165,7 +1209,7 @@ onUnmounted(() => {
   box-shadow: $pm-shadow;
 }
 .cm-item.me .cm-bubble {
-  background: $pm-primary;
+  background: $pm-primary-soft;
   border-radius: 22rpx 6rpx 22rpx 22rpx;
 }
 .cm-text,
@@ -1177,7 +1221,7 @@ onUnmounted(() => {
 }
 .cm-item.me .cm-text,
 .cm-item.me .cm-rich {
-  color: #fff;
+  color: $pm-text;
 }
 .cm-nil {
   padding: 60rpx 0;
@@ -1433,13 +1477,15 @@ onUnmounted(() => {
 }
 /* 评论里的 @昵称 高亮 */
 .cm-rich .cm-at {
-  color: #0E5F3B;
+  color: $pm-primary-deep;
   font-weight: 700;
 }
 .cm-item.me .cm-rich,
-.cm-item.me .cm-rich p,
+.cm-item.me .cm-rich p {
+  color: $pm-text;
+}
 .cm-item.me .cm-rich .cm-at {
-  color: #fff;
+  color: $pm-primary-deep;
 }
 
 /* —— 图片查看器（微信风格：黑底 / 单击关闭 / 左右切换 / 页码） —— */
@@ -1489,5 +1535,99 @@ onUnmounted(() => {
   color: #fff;
   font-size: 30rpx;
   z-index: 201;
+}
+
+/* —— 评论引用块 —— */
+.cm-quote {
+  margin-bottom: 10rpx;
+  padding: 12rpx 18rpx;
+  border-radius: 10rpx;
+  border-left: 6rpx solid $pm-line;
+  background: $pm-bg-2;
+}
+.cm-item.me .cm-quote {
+  border-left-color: $pm-primary;
+  background: rgba(255, 255, 255, 0.75);
+}
+.cm-quote-name {
+  display: block;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: $pm-muted;
+  margin-bottom: 4rpx;
+}
+.cm-item.me .cm-quote-name {
+  color: $pm-primary-deep;
+}
+.cm-quote-body {
+  font-size: 25rpx;
+  line-height: 1.5;
+  color: $pm-text-secondary;
+  word-break: break-word;
+}
+.cm-quote-body .cm-at {
+  color: $pm-primary-deep;
+  font-weight: 700;
+}
+.cm-item.me .cm-quote-body {
+  color: $pm-text-secondary;
+}
+.cm-item.me .cm-quote-body .cm-at {
+  color: $pm-primary-deep;
+}
+.cm-quote-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8rpx 0;
+  border-radius: 8rpx;
+}
+.cm-quote-btn {
+  margin-left: 8rpx;
+  font-size: 20rpx;
+  font-weight: 700;
+  color: $pm-primary;
+}
+.cm-item.me .cm-quote-btn {
+  color: $pm-primary-deep;
+}
+.cm-quote-draft {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 14rpx 24rpx 0;
+}
+.cm-quote-draft-main {
+  flex: 1;
+  min-width: 0;
+  padding: 12rpx 18rpx;
+  background: $pm-bg-2;
+  border-left: 6rpx solid $pm-line;
+  border-radius: 10rpx;
+}
+.cm-quote-draft-label {
+  display: block;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: $pm-muted;
+  margin-bottom: 4rpx;
+}
+.cm-quote-draft-text {
+  display: block;
+  font-size: 24rpx;
+  color: $pm-text-secondary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-quote-draft-clear {
+  flex-shrink: 0;
+  width: 48rpx;
+  height: 48rpx;
+  line-height: 48rpx;
+  text-align: center;
+  color: $pm-muted;
+  font-size: 26rpx;
+  margin-left: 8rpx;
 }
 </style>
