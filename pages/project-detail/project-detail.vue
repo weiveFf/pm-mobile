@@ -31,8 +31,19 @@
         :urgency-label="row.urgencyLabel"
         :urgency-tone="row.urgencyTone"
         :customer="row.customer"
+        :product-name="row.productName"
+        :saler-name="row.salerName"
         :demand-finish="row.demandFinish"
         :handler="row.handler"
+        :dept-name="row.deptName"
+        :creator-name="row.creatorName"
+        :create-time="row.createTime"
+        :responded-time="row.respondedTime"
+        :close-time="row.closeTime"
+        :reassign-count="row.reassignCount"
+        :overdue-days="row.overdueDays"
+        :show-creator-subtitle="true"
+        :show-saler-in-meta="false"
         @click="openDetail(row.id)"
       />
         <view v-if="!loading && !list.length" class="empty-box">
@@ -48,9 +59,11 @@
 <script setup>
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getProductManageByFid, getProductFeedbackList } from '@/api/after-sales.js'
+import { getProductManageByFid, getProductFeedbackPage } from '@/api/after-sales.js'
 import { resolveFeedbackWorkflowDisplay, formatHandlerPair } from '@/utils/feedbackWorkflow.js'
 import { getUrgencyLabel, getUrgencyTone, formatDateOnly } from '@/utils/urgencyDisplay.js'
+import { extractArray } from '@/utils/apiResponse.js'
+import { formatDateTimeMinute, getRespondedTimeText } from '@/utils/feedbackListRowHelpers.js'
 
 const fid = ref('')
 const fbillno = ref('')
@@ -60,19 +73,36 @@ const loading = ref(false)
 
 function mapRow(item) {
   const fb = item.feedback || item
+  const project = item.project || {}
   const display = resolveFeedbackWorkflowDisplay(item)
+  const overdue = !!display.overdueType
+  const serial = String(fb.serialNumber || fb.id || '').replace(/^#/, '')
   return {
     id: fb.id,
-    serial: fb.serialNumber || fb.id,
+    serial,
     statusLabel: display.label,
-    statusTone: display.overdueType ? 'danger' : '',
+    statusTone: overdue ? 'danger' : display.status === 'pending_response' ? 'warn' : '',
     abnormalType: fb.abnormalType,
     problemType: fb.problemType,
     urgencyLabel: getUrgencyLabel(fb.urgencyLevel),
     urgencyTone: getUrgencyTone(fb.urgencyLevel),
-    customer: fb.customerName || fb.fshortname || '',
+    customer: project.fshortname || project.FSHORTNAME || fb.customerName || fb.fshortname || '',
+    productName:
+      project.materialName ||
+      project.MaterialName ||
+      (fb.afterSalesExt && fb.afterSalesExt.productName) ||
+      (fb.AfterSalesExt && fb.AfterSalesExt.ProductName) ||
+      '',
+    salerName: project.fSalerName || project.FSALERNAME || '',
     demandFinish: formatDateOnly(fb.demandFinishTime),
-    handler: formatHandlerPair(fb)
+    handler: formatHandlerPair(fb),
+    deptName: fb.deptName || fb.DeptName || '',
+    creatorName: fb.createByNickName || fb.CreateByNickName || '',
+    createTime: formatDateTimeMinute(fb.create_time || fb.createTime || fb.Create_time),
+    respondedTime: getRespondedTimeText(item.processList || item.ProcessList),
+    closeTime: formatDateTimeMinute(fb.closeTime || fb.CloseTime),
+    reassignCount: Number(fb.deptReassignCount || fb.DeptReassignCount || 0),
+    overdueDays: item.overdueDays || 0
   }
 }
 
@@ -87,12 +117,10 @@ async function load() {
         project.value = { fid: fid.value, fbillno: fbillno.value }
       }
     }
-    const params = {}
-    if (fbillno.value) params.fbillno = fbillno.value
-    if (fid.value) params.productFid = fid.value
-    const res = await getProductFeedbackList(params)
-    const rows = res.data || []
-    list.value = (Array.isArray(rows) ? rows : rows.result || []).map(mapRow)
+    const params = { pageNum: 1, pageSize: 999 }
+    if (fid.value) params.fid = fid.value
+    const res = await getProductFeedbackPage(params)
+    list.value = extractArray(res).map(mapRow)
   } catch (e) {
     uni.showToast({ title: (e && e.message) || '加载失败', icon: 'none' })
   } finally {

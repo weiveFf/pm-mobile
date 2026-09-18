@@ -377,7 +377,7 @@ function goTab(url) {
 }
 
 function goStats() {
-  uni.navigateTo({ url: '/pages/stats/stats' })
+  uni.showToast({ title: '功能正在维护中', icon: 'none' })
 }
 
 onShow(() => {
