@@ -134,6 +134,22 @@
         <view v-if="!logViews.length" class="nil">还没有记录</view>
       </view>
 
+      <!-- 图片查看器（微信风格：黑底 / 单击关闭 / 左右切换 / 页码） -->
+      <view v-if="previewVisible" class="pv" @click="closePreview">
+        <swiper
+          class="pv-swiper"
+          :current="previewIndex"
+          :circular="previewUrls.length > 1"
+          @change="onPvChange"
+        >
+          <swiper-item v-for="(u, i) in previewUrls" :key="i" class="pv-item">
+            <image class="pv-img" :src="u" mode="aspectFit" />
+          </swiper-item>
+        </swiper>
+        <view v-if="previewUrls.length > 1" class="pv-index">{{ previewIndex + 1 }} / {{ previewUrls.length }}</view>
+        <view class="pv-close" @click.stop="closePreview">✕</view>
+      </view>
+
       <view class="dock">
         <scroll-view scroll-x class="dock-scroll" :show-scrollbar="false">
           <view class="dock-inner">
@@ -157,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getUserId, getAccount, getIsDeptLeader, getIsFirstContact, getBaseURL } from '@/utils/auth.js'
 import {
@@ -401,13 +417,88 @@ const logViews = computed(() =>
   })
 )
 
-function onRichClick(e, html) {
-  const target = e.target
-  if (!target || target.tagName !== 'IMG') return
-  const urls = extractImageSrcs(html)
-  if (!urls.length) return
-  uni.previewImage({ current: target.src, urls })
+/** 把相对图片地址补成绝对地址（H5），保证 previewImage 的 current 能对上列表 */
+function toAbsUrl(u) {
+  const s = String(u || '')
+  if (!s || /^(https?:|data:|blob:)/i.test(s)) return s
+  // #ifdef H5
+  try {
+    return new URL(s, window.location.origin).href
+  } catch (e) {
+    return s
+  }
+  // #endif
+  // #ifndef H5
+  return s
+  // #endif
 }
+
+/** 图片查看器（微信风格：黑底全屏 / 单击关闭 / 左右切换 / 页码） */
+const previewVisible = ref(false)
+const previewUrls = ref([])
+const previewIndex = ref(0)
+
+function openPreview(src) {
+  const s = String(src || '')
+  if (!s) return
+  let urls = [s]
+  // #ifdef H5
+  try {
+    const all = Array.prototype.slice
+      .call(document.querySelectorAll(PAGE_SEL + ' img'))
+      .map((i) => i.src)
+      .filter(Boolean)
+    if (all.length) urls = all
+  } catch (e) {}
+  // #endif
+  previewUrls.value = urls
+  previewIndex.value = Math.max(0, urls.indexOf(s))
+  previewVisible.value = true
+}
+function closePreview() {
+  previewVisible.value = false
+}
+function onPvChange(e) {
+  previewIndex.value = (e && e.detail && e.detail.current) || 0
+}
+
+/** 点富文本里的图片 → 打开查看器（非 H5 兜底；H5 走下方原生事件委托） */
+function onRichClick(e, html) {
+  const target = (e && (e.target || (e.detail && e.detail.target))) || null
+  const tag = target ? String(target.tagName || target.nodeName || '').toUpperCase() : ''
+  if (tag !== 'IMG') return
+  openPreview(toAbsUrl(target.src || (target.getAttribute && target.getAttribute('src'))))
+}
+
+/* —— H5：v-html 内部节点不会冒泡到 uni 的 @click，改用原生事件委托做图片预览 —— */
+// #ifdef H5
+const PAGE_SEL = '.detail-page'
+let boundPreviewEl = null
+
+function onPageClickCapture(e) {
+  const t = e && e.target
+  const tag = t ? String(t.tagName || t.nodeName || '').toUpperCase() : ''
+  if (tag !== 'IMG') return
+  // 查看器内部的点击由查看器自己处理（单击关闭），不要重复打开
+  if (t.closest && t.closest('.pv')) return
+  openPreview(t.src || (t.getAttribute && t.getAttribute('src')))
+}
+
+function bindPagePreview() {
+  const el = document.querySelector(PAGE_SEL)
+  if (!el || el === boundPreviewEl) return
+  unbindPagePreview()
+  el.addEventListener('click', onPageClickCapture, false)
+  boundPreviewEl = el
+}
+
+function unbindPagePreview() {
+  if (boundPreviewEl) {
+    boundPreviewEl.removeEventListener('click', onPageClickCapture, false)
+    boundPreviewEl = null
+  }
+}
+// #endif
 
 /** 自己的评论靠右(聊天气泡)：评论 Create_by 也是登录账号，账号优先、userId 兜底 */
 function isMine(c) {
@@ -703,6 +794,20 @@ onLoad((q) => {
 })
 onShow(() => {
   if (id.value) load()
+})
+
+onMounted(() => {
+  // #ifdef H5
+  nextTick(bindPagePreview)
+  // DOM 挂载可能延迟，再兜底一次
+  setTimeout(bindPagePreview, 300)
+  // #endif
+})
+
+onUnmounted(() => {
+  // #ifdef H5
+  unbindPagePreview()
+  // #endif
 })
 </script>
 
@@ -1335,5 +1440,54 @@ onShow(() => {
 .cm-item.me .cm-rich p,
 .cm-item.me .cm-rich .cm-at {
   color: #fff;
+}
+
+/* —— 图片查看器（微信风格：黑底 / 单击关闭 / 左右切换 / 页码） —— */
+.pv {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  z-index: 200;
+}
+.pv-swiper {
+  width: 100%;
+  height: 100%;
+}
+.pv-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pv-img {
+  width: 100%;
+  height: 100%;
+}
+.pv-index {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(48rpx + env(safe-area-inset-bottom));
+  text-align: center;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 26rpx;
+  font-weight: 600;
+  pointer-events: none;
+}
+.pv-close {
+  position: fixed;
+  top: calc(24rpx + env(safe-area-inset-top));
+  right: 32rpx;
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 30rpx;
+  z-index: 201;
 }
 </style>

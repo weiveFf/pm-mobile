@@ -304,7 +304,10 @@ async function loadStats() {
     const res = await getUserWorkloadStatistics({ userId: uid, scope: scope.value })
     const d = res.data || {}
     counts.pending = d.pendingCount != null ? d.pendingCount : d.pending
-    counts.mine = d.myFeedbackCount != null ? d.myFeedbackCount : null
+    // 「我的反馈」计数：用后端「进行中」口径（未关闭且未撤回），与列表一致
+    counts.mine = d.myOngoingFeedbackCount != null
+      ? d.myOngoingFeedbackCount
+      : (d.myFeedbackCount != null ? d.myFeedbackCount : null)
     // 逾期：我的口径用 MyOverdueCount，部门口径用 DeptOverdueCount
     counts.overdue = scope.value === 'dept'
       ? (d.deptOverdueCount != null ? d.deptOverdueCount : null)
@@ -312,24 +315,6 @@ async function loadStats() {
     // 进度环：我的处理完成度
     processStats.total = d.totalProcessCount != null ? d.totalProcessCount : null
     processStats.done = d.processedCount != null ? d.processedCount : null
-  } catch (e) {}
-  // 「我的反馈」计数：与工作台列表同口径（我创建的、未关闭、未撤回），避免把已撤回/已关闭算进去
-  refreshMyFeedbackCount()
-}
-
-/** 用列表接口的准确总数覆盖「我的反馈」计数（后端统计口径含已关闭/已撤回，不做改动） */
-async function refreshMyFeedbackCount() {
-  try {
-    const res = await getProductFeedbackPage({
-      pageNum: 1,
-      pageSize: 1,
-      isClose: false,
-      mineScope: 'all',
-      currentUserId: getUserId(),
-      currentUserName: getAccount() || getUserName()
-    })
-    const data = res.data || {}
-    if (data.totalNum != null) counts.mine = data.totalNum
   } catch (e) {}
 }
 
@@ -378,8 +363,6 @@ async function fetchList(reset) {
     }
     const rows = raw.map(mapRow)
     total.value = totalNum
-    // 「我的反馈」计数与列表保持一致（不含已撤回/已关闭）
-    if (workbenchType.value === 'mine') counts.mine = totalNum
     list.value = reset ? rows : list.value.concat(rows)
     if (list.value.length >= total.value || rows.length < pageSize) finished.value = true
     else pageNum.value += 1
