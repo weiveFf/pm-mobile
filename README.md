@@ -16,7 +16,12 @@
 
 推荐用 **HBuilderX** 打开本目录，运行到浏览器 / 手机。
 
-默认接口地址在 `config/index.js` 的 `baseURL`，也可在登录页或「我的」里修改。
+接口地址策略：
+
+- **生产（H5 + Nginx 反代）**：`config/index.js` 的 `baseURL` 为同源相对路径 `/api`，由 Nginx 把 `/api/` 转发到后端，**前端不写死后端地址**；
+- **开发**：`baseURL` 用绝对地址直连后端（改 `config/index.js` 即可；**界面已不再提供地址配置入口**）。
+
+Nginx 参考配置见文末《部署（H5 + Nginx）》。
 
 主题色：`#0E5F3B`（森林绿，VITAL × FOREST 设计语言，米白暖底 `#FAF8F4`，铜色点缀 `#B8744A`）。设计 Token 统一在 `uni.scss` 的 `$pm-*` 命名空间。
 
@@ -30,7 +35,7 @@
 | --- | --- |
 | 设计 Token | `uni.scss` 集中定义 `$pm-*`：主色 `#0E5F3B`、暖底 `#FAF8F4`、铜色 `#B8744A`、`$pm-grad-hero` / `$pm-grad-brand`、6 个瓷贴渐变、`$pm-press-ease` 弹性曲线 |
 | 工作台 | 问候栏（渐变头像 + 日期 + 问候语）、渐变 Hero 卡 + conic-gradient 完成率环 + 进行中/待关闭/已关闭统计、4 个彩色快捷瓷贴 |
-| 我的 | 森林渐变 Hero 卡（头像首字 + 姓名 + 工号 + 三列统计）、双列功能瓷贴、可折叠接口地址卡、胶囊退出按钮 |
+| 我的 | 森林渐变 Hero 卡（头像首字 + 姓名 + 工号 + 两列统计）、功能瓷贴、胶囊退出按钮 |
 | 反馈详情 | 评论改为聊天气泡（自己的消息品牌绿右侧，他人暖灰左侧、6rpx 非对称圆角）、底部操作 Dock 玻璃拟态 + `env(safe-area-inset-bottom)` |
 | 项目/流程详情 | Hero 渐变卡 + 装饰光斑圆 + 弹性按压 CTA |
 | 5 个流程表单 | 延期/再处理/改处理人/改部门/客诉审核统一为胶囊 `.value` 选择器 + 28rpx 圆角 `.textarea` + `$pm-surface` 白卡投影 |
@@ -66,3 +71,38 @@ pm-mobile/
   utils/         # 请求、鉴权、工作流、紧急程度、售后扩展
   constants/     # 枚举
 ```
+
+## 部署（H5 + Nginx）
+
+1. HBuilderX「发行 → 网站 H5」，产物在 `unpackage/dist/build/h5`。
+2. 生产环境 `config/index.js` 的 `baseURL = '/api'`（已内置）；前端**无需**配置任何后端地址。
+3. 所有接口——含 `uni.request`、上传 `/Common/UploadFile`、图片 `/uploads/...`、公钥 `/login/public-key`——都会以 `/api/...` 前缀发出，Nginx 统一把 `/api/` 转发到后端即可。
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # H5 静态资源（指向 HBuilderX 的 h5 打包产物目录）
+    root /data/www/pm-mobile;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;      # hash 路由，兜底回 index.html
+    }
+
+    # 后端 API 反代：/api/xxx  ->  http://后端:8187/xxx
+    location /api/ {
+        proxy_pass http://192.168.1.156:8187/; # 末尾 “/” 会剥离 /api 前缀
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 20m;              # 上传预留
+    }
+}
+```
+
+- `proxy_pass` 末尾的 `/` 很关键：带它才会把 `/api/` 剥掉再转发，后端收到的仍是原始路径（如 `/system/user/list`）。若后端本身要求带 `/api` 前缀访问，则去掉末尾的 `/`。
+- H5 路由为 hash 模式、`router.base` 为 `./`（相对），部署在根目录或子目录一般都不用改；如需固定子目录可在 `manifest.json` 的 `h5.router.base` 调整。
+- 前端已移除所有「接口地址」配置入口（登录页与「我的」），后端地址完全由部署环境（Nginx）决定；如需临时改地址，改 `config/index.js` 的 `baseURL`。

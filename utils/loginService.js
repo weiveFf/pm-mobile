@@ -1,6 +1,14 @@
 import { fetchPublicKey, loginEncrypt, fetchUserInfo } from '@/api/login.js'
 import { encryptLoginPayload } from '@/utils/encrypt.js'
-import { setToken, setUserId, setUserName, setAccount, setDeptId } from '@/utils/auth.js'
+import {
+  setToken,
+  setUserId,
+  setUserName,
+  setAccount,
+  setDeptId,
+  setIsDeptLeader,
+  setIsFirstContact
+} from '@/utils/auth.js'
 
 /** 完整登录流程（与 YessysWebVue / handheld 对齐） */
 export async function doLogin(username, password) {
@@ -24,6 +32,8 @@ export async function doLogin(username, password) {
       setUserName(user.nickName || user.userName || username)
       setAccount(user.userName || username)
       setDeptId(user.deptId != null ? user.deptId : '')
+      setIsDeptLeader(user.isDeptLeader)
+      setIsFirstContact(user.isFirstContact)
     } else {
       setUserName(username)
       setAccount(username)

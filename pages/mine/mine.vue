@@ -21,19 +21,15 @@
             <text class="ms-l">版本</text>
           </view>
           <view class="ms">
-            <text class="ms-n">{{ baseURL ? '已连接' : '未配置' }}</text>
-            <text class="ms-l">接口</text>
-          </view>
-          <view class="ms">
             <text class="ms-n">{{ userId ? '在线' : '离线' }}</text>
             <text class="ms-l">状态</text>
           </view>
         </view>
       </view>
 
-      <!-- 常用功能 · 双列瓷贴(ME-01) -->
+      <!-- 常用功能 -->
       <view class="shead"><text class="st">常用功能</text></view>
-      <view class="mgrid">
+      <view class="mgrid one">
         <view class="mitem pressable" @click="goStats">
           <view class="sq s5">◔</view>
           <view class="mtxt">
@@ -41,24 +37,6 @@
             <text class="msub">看看最近做得怎么样</text>
           </view>
           <text class="ar">›</text>
-        </view>
-        <view class="mitem pressable" @click="syncNow">
-          <view class="sq s1">⇱</view>
-          <view class="mtxt">
-            <text class="mt">接口地址</text>
-            <text class="msub">{{ baseURL ? '已连接' : '未配置' }}</text>
-          </view>
-          <text class="ar">›</text>
-        </view>
-      </view>
-
-      <!-- 接口地址编辑 -->
-      <view v-if="showBaseEdit" class="tile col">
-        <text class="tile-title">接口地址</text>
-        <input v-model="editBase" class="url" placeholder="http://host:port" />
-        <view class="save-row">
-          <text class="hint">修改后立即生效</text>
-          <text class="save" @click="saveBase">保存</text>
         </view>
       </view>
 
@@ -102,22 +80,12 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import config from '@/config/index.js'
-import {
-  getUserName,
-  getUserId,
-  getBaseURL,
-  setBaseURL,
-  isValidBaseURL,
-  clearAuth
-} from '@/utils/auth.js'
+import { getUserName, getUserId, clearAuth } from '@/utils/auth.js'
 import { ensureLoggedIn } from '@/utils/authGuard.js'
 import { logoutApi } from '@/api/login.js'
 
 const userName = ref('')
 const userId = ref('')
-const baseURL = ref('')
-const editBase = ref('')
-const showBaseEdit = ref(false)
 const version = config.version
 
 const avatarLetter = computed(() => {
@@ -128,26 +96,9 @@ const avatarLetter = computed(() => {
 function refresh() {
   userName.value = getUserName()
   userId.value = getUserId()
-  baseURL.value = getBaseURL()
-  editBase.value = baseURL.value
 }
 
 function noop() {}
-
-function syncNow() {
-  showBaseEdit.value = !showBaseEdit.value
-}
-
-function saveBase() {
-  if (!isValidBaseURL(editBase.value)) {
-    uni.showToast({ title: '地址无效', icon: 'none' })
-    return
-  }
-  setBaseURL(editBase.value)
-  baseURL.value = getBaseURL()
-  showBaseEdit.value = false
-  uni.showToast({ title: '已保存', icon: 'success' })
-}
 
 function onAbout() {
   uni.showToast({ title: config.appName + ' ' + version, icon: 'none' })
@@ -400,47 +351,6 @@ onShow(() => {
   color: #C6C0B2;
   font-size: 28rpx;
   margin-left: 8rpx;
-}
-
-/* —— 接口地址编辑卡 —— */
-.tile.col {
-  margin: 0 24rpx 20rpx;
-  padding: 28rpx;
-  background: $pm-surface;
-  border-radius: $pm-radius;
-  box-shadow: $pm-shadow;
-  display: flex;
-  flex-direction: column;
-}
-.tile-title {
-  font-size: 26rpx;
-  font-weight: 750;
-  color: $pm-text;
-}
-.url {
-  margin-top: 20rpx;
-  height: 80rpx;
-  padding: 0 28rpx;
-  background: $pm-bg-2;
-  border-radius: 999rpx;
-  font-size: 24rpx;
-  color: $pm-text;
-}
-.save-row {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 18rpx;
-}
-.hint {
-  font-size: 22rpx;
-  color: $pm-muted;
-}
-.save {
-  font-size: 26rpx;
-  color: $pm-primary;
-  font-weight: 750;
 }
 
 /* —— 退出登录：作为账号与安全列表项，仅文字用红色强调 —— */

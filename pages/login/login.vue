@@ -46,18 +46,6 @@
           />
         </view>
 
-        <view v-if="showAdvanced" class="field" :class="{ focus: focusField === 'url' }">
-          <text class="lb">接口地址</text>
-          <input
-            v-model="baseURL"
-            class="ipt"
-            placeholder="http://host:port"
-            placeholder-class="ph"
-            @focus="onFocus('url')"
-            @blur="onBlur"
-          />
-        </view>
-
         <button class="login-btn" :loading="loading" :disabled="loading" @click="onLogin">
           登 录
         </button>
@@ -71,10 +59,6 @@
         </view>
 
         <view class="alt-row">
-          <view class="alt" @click="showAdvanced = !showAdvanced">
-            <view class="alt-ico info">设</view>
-            <text class="alt-lb">{{ showAdvanced ? '收起' : '接口' }}</text>
-          </view>
           <view class="alt" @click="remember = !remember">
             <view class="alt-ico brand" :class="{ on: remember }">{{ remember ? '✓' : '记' }}</view>
             <text class="alt-lb">记住</text>
@@ -99,9 +83,6 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import config from '@/config/index.js'
 import {
-  getBaseURL,
-  setBaseURL,
-  isValidBaseURL,
   getRemember,
   setRemember,
   getSavedLogin,
@@ -116,10 +97,8 @@ const safeBottom = ref(0)
 const keyboardHeight = ref(0)
 const username = ref('')
 const password = ref('')
-const baseURL = ref('')
 const remember = ref(false)
 const loading = ref(false)
-const showAdvanced = ref(false)
 const focusField = ref('')
 
 const greeting = computed(() => {
@@ -178,7 +157,6 @@ onMounted(() => {
   // #ifdef APP-PLUS || MP-WEIXIN
   uni.onKeyboardHeightChange && uni.onKeyboardHeightChange(onKeyboardHeightChange)
   // #endif
-  baseURL.value = getBaseURL() || config.baseURL
   remember.value = getRemember()
   if (remember.value) {
     const saved = getSavedLogin()
@@ -202,12 +180,6 @@ async function onLogin() {
     uni.showToast({ title: '请输入账号密码', icon: 'none' })
     return
   }
-  if (!isValidBaseURL(baseURL.value)) {
-    showAdvanced.value = true
-    uni.showToast({ title: '请先填写有效接口地址', icon: 'none' })
-    return
-  }
-  setBaseURL(baseURL.value)
   loading.value = true
   try {
     await doLogin(username.value, password.value)

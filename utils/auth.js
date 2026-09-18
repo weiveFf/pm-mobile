@@ -43,6 +43,23 @@ export function setDeptId(deptId) {
   uni.setStorageSync(K.deptId, deptId != null ? String(deptId) : '')
 }
 
+/** 部门负责人 / 第一接口人身份（getInfo 返回），用于详情页指派/转派/客诉审核按钮显隐 */
+export function getIsDeptLeader() {
+  return uni.getStorageSync(K.isDeptLeader) || ''
+}
+
+export function setIsDeptLeader(v) {
+  uni.setStorageSync(K.isDeptLeader, v === true || v === 1 || v === '1' ? '1' : '')
+}
+
+export function getIsFirstContact() {
+  return uni.getStorageSync(K.isFirstContact) || ''
+}
+
+export function setIsFirstContact(v) {
+  uni.setStorageSync(K.isFirstContact, v === true || v === 1 || v === '1' ? '1' : '')
+}
+
 export function normalizeBaseURL(url) {
   return (url || '').trim().replace(/\/+$/, '')
 }
@@ -50,7 +67,8 @@ export function normalizeBaseURL(url) {
 export function isValidBaseURL(url) {
   const u = normalizeBaseURL(url)
   if (!u) return false
-  return /^https?:\/\/.+/i.test(u)
+  // 允许绝对地址（http(s)://…）或同源相对路径（/api）；生产用 Nginx 反代时用后者
+  return /^https?:\/\/.+/i.test(u) || u.charAt(0) === '/'
 }
 
 export function getBaseURL() {
@@ -68,6 +86,8 @@ export function clearAuth() {
   uni.removeStorageSync(K.userName)
   uni.removeStorageSync(K.account)
   uni.removeStorageSync(K.deptId)
+  uni.removeStorageSync(K.isDeptLeader)
+  uni.removeStorageSync(K.isFirstContact)
 }
 
 export function isLoggedIn() {

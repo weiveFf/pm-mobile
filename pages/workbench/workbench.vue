@@ -131,11 +131,9 @@
         :reassign-count="row.reassignCount"
         :mentioned-me="row.mentionedMe"
         :overdue-days="row.overdueDays"
-        :actions="row.actions"
         :show-creator-subtitle="true"
         :show-saler-in-meta="false"
         @click="openDetail(row.id)"
-        @action="(k) => onAction(k, row)"
       />
       <view v-if="!loading && !list.length" class="pm-empty">{{ emptyText }}</view>
       <view class="pm-load-more">{{ loading ? '加载中' : finished ? '已经看完啦' : '' }}</view>
@@ -150,12 +148,14 @@ import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { usePullRefresh } from '@/composables/usePullRefresh.js'
 import { ensureLoggedIn } from '@/utils/authGuard.js'
-import { getUserId, getUserName } from '@/utils/auth.js'
+import { getUserId, getUserName, getAccount } from '@/utils/auth.js'
 import {
   getWorkbenchFeedbackPage,
+  getProductFeedbackPage,
   getUserWorkloadStatistics,
   markProcessResponded
 } from '@/api/after-sales.js'
+import { extractArray } from '@/utils/apiResponse.js'
 import { WORKBENCH_TYPES, WORKBENCH_SCOPES } from '@/constants/feedbackWorkflow.js'
 import { resolveFeedbackWorkflowDisplay, formatHandlerPair, canRespondFeedbackRow } from '@/utils/feedbackWorkflow.js'
 import { getUrgencyLabel, getUrgencyTone, formatDateOnly } from '@/utils/urgencyDisplay.js'
@@ -313,6 +313,24 @@ async function loadStats() {
     processStats.total = d.totalProcessCount != null ? d.totalProcessCount : null
     processStats.done = d.processedCount != null ? d.processedCount : null
   } catch (e) {}
+  // 「我的反馈」计数：与工作台列表同口径（我创建的、未关闭、未撤回），避免把已撤回/已关闭算进去
+  refreshMyFeedbackCount()
+}
+
+/** 用列表接口的准确总数覆盖「我的反馈」计数（后端统计口径含已关闭/已撤回，不做改动） */
+async function refreshMyFeedbackCount() {
+  try {
+    const res = await getProductFeedbackPage({
+      pageNum: 1,
+      pageSize: 1,
+      isClose: false,
+      mineScope: 'all',
+      currentUserId: getUserId(),
+      currentUserName: getAccount() || getUserName()
+    })
+    const data = res.data || {}
+    if (data.totalNum != null) counts.mine = data.totalNum
+  } catch (e) {}
 }
 
 async function fetchList(reset) {
@@ -331,16 +349,37 @@ async function fetchList(reset) {
   if (finished.value) return
   loading.value = true
   try {
-    const res = await getWorkbenchFeedbackPage({
-      userId: getUserId(),
-      workbenchType: workbenchType.value,
-      scope: scope.value,
-      pageNum: pageNum.value,
-      pageSize
-    })
-    const data = res.data || {}
-    const rows = (data.result || data.rows || []).map(mapRow)
-    total.value = data.totalNum || data.total || 0
+    let raw = []
+    let totalNum = 0
+    if (workbenchType.value === 'mine') {
+      // 与 PC 工作台口径一致：走 /afterSales/feedback/page（该接口不返回已撤回），只看未关闭的「进行中」反馈
+      const res = await getProductFeedbackPage({
+        pageNum: pageNum.value,
+        pageSize,
+        isClose: false,
+        mineScope: 'all',
+        currentUserId: getUserId(),
+        currentUserName: getAccount() || getUserName()
+      })
+      const data = res.data || {}
+      raw = extractArray(res)
+      totalNum = data.totalNum || 0
+    } else {
+      const res = await getWorkbenchFeedbackPage({
+        userId: getUserId(),
+        workbenchType: workbenchType.value,
+        scope: scope.value,
+        pageNum: pageNum.value,
+        pageSize
+      })
+      const data = res.data || {}
+      raw = data.result || data.rows || []
+      totalNum = data.totalNum || data.total || 0
+    }
+    const rows = raw.map(mapRow)
+    total.value = totalNum
+    // 「我的反馈」计数与列表保持一致（不含已撤回/已关闭）
+    if (workbenchType.value === 'mine') counts.mine = totalNum
     list.value = reset ? rows : list.value.concat(rows)
     if (list.value.length >= total.value || rows.length < pageSize) finished.value = true
     else pageNum.value += 1
