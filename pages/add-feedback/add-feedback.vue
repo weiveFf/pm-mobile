@@ -2,6 +2,7 @@
   <view class="pm-page add-page">
     <app-nav-bar title="添加反馈" />
 
+    <!-- 项目信息头卡 -->
     <view class="head-card">
       <text class="head-title">{{ projectTitle }}</text>
       <view class="head-meta">
@@ -29,23 +30,24 @@
       <!-- 第 1 步：基础信息 -->
       <view v-if="step === 1" class="step-panel">
         <view class="pm-card form-card">
-          <view class="field-row">
-            <view class="field half">
+          <text class="card-title">基础信息</text>
+
+          <view class="field-stack">
+            <view class="field">
               <text class="label required">异常类型</text>
               <picker :range="abnormalLabels" :value="abnormalIndex" @change="onAbnormal">
                 <view class="value">{{ abnormalLabels[abnormalIndex] || '请选择' }}</view>
               </picker>
             </view>
-            <view class="field half">
-              <text class="label">问题类型</text>
-              <picker :range="problemLabels" :value="problemIndex" :disabled="!problemOptions.length" @change="onProblem">
-                <view class="value" :class="{ muted: !problemOptions.length }">{{ problemLabels[problemIndex] || '请选择' }}</view>
+
+            <view v-if="problemOptions.length" class="field">
+              <text class="label" :class="{ required: problemOptions.length }">问题类型</text>
+              <picker :range="problemLabels" :value="problemIndex" @change="onProblem">
+                <view class="value">{{ problemLabels[problemIndex] || '请选择' }}</view>
               </picker>
             </view>
-          </view>
 
-          <view class="field-row">
-            <view class="field half">
+            <view class="field">
               <text class="label required">处理部门</text>
               <dept-tree-picker v-model="form.deptId" :depts="deptFlat" :disabled="isDeptLocked" @change="onDept" />
               <text v-if="deptLockHint" class="hint warn">{{ deptLockHint }}</text>
@@ -53,7 +55,8 @@
                 处理人/负责人：{{ handlerPairDisplay }}
               </text>
             </view>
-            <view class="field half">
+
+            <view class="field">
               <text class="label required">期望完成日期</text>
               <picker mode="date" :value="form.demandFinishTime" :start="today" @change="onFinishDate">
                 <view class="value">{{ form.demandFinishTime || '请选择' }}</view>
@@ -68,15 +71,16 @@
 
         <!-- 客诉：被投诉部门 / 被投诉人 -->
         <view v-if="form.abnormalType === '客诉'" class="pm-card form-card">
+          <text class="card-title">投诉对象</text>
           <view class="card-tip danger">
             客诉附件必须是来自客户的投诉，客户的需求不算投诉
           </view>
-          <view class="field-row">
-            <view class="field half">
+          <view class="field-stack">
+            <view class="field">
               <text class="label">被投诉部门</text>
               <dept-tree-picker v-model="form.complaintDeptId" :depts="deptFlat" @change="onComplaintDept" />
             </view>
-            <view class="field half">
+            <view class="field">
               <text class="label">被投诉人</text>
               <picker :range="complaintUserLabels" :value="complaintUserIndex" @change="onComplaintUser">
                 <view class="value">{{ complaintUserLabels[complaintUserIndex] || '请选择' }}</view>
@@ -89,8 +93,8 @@
         <!-- 售后：扩展字段 -->
         <view v-if="form.abnormalType === '售后'" class="pm-card form-card">
           <text class="card-title">售后信息</text>
-          <view class="ext-grid">
-            <view v-for="f in visibleExtFields" :key="f.prop" class="ext-cell">
+          <view class="field-stack">
+            <view v-for="f in visibleExtFields" :key="f.prop" class="field">
               <text class="label" :class="{ required: f.required }">{{ f.label }}</text>
               <input
                 v-if="f.type === 'input'"
@@ -107,22 +111,26 @@
                 :placeholder="f.placeholder || '请输入' + f.label"
               />
             </view>
-            <view class="ext-cell full">
+            <view class="field">
               <text class="label required">发生时间段</text>
               <view class="datetime-row">
-                <picker mode="date" :value="occurrenceStartDate" @change="e => (occurrenceStartDate = e.detail.value)">
-                  <view class="value mini">{{ occurrenceStartDate || '开始日期' }}</view>
-                </picker>
-                <picker mode="time" :value="occurrenceStartTime" @change="e => (occurrenceStartTime = e.detail.value)">
-                  <view class="value mini">{{ occurrenceStartTime || '开始时间' }}</view>
-                </picker>
+                <view class="datetime-half">
+                  <picker mode="date" :value="occurrenceStartDate" @change="e => (occurrenceStartDate = e.detail.value)">
+                    <view class="value mini">{{ occurrenceStartDate || '开始日期' }}</view>
+                  </picker>
+                  <picker mode="time" :value="occurrenceStartTime" @change="e => (occurrenceStartTime = e.detail.value)">
+                    <view class="value mini">{{ occurrenceStartTime || '开始时间' }}</view>
+                  </picker>
+                </view>
                 <text class="sep">至</text>
-                <picker mode="date" :value="occurrenceEndDate" @change="e => (occurrenceEndDate = e.detail.value)">
-                  <view class="value mini">{{ occurrenceEndDate || '结束日期' }}</view>
-                </picker>
-                <picker mode="time" :value="occurrenceEndTime" @change="e => (occurrenceEndTime = e.detail.value)">
-                  <view class="value mini">{{ occurrenceEndTime || '结束时间' }}</view>
-                </picker>
+                <view class="datetime-half">
+                  <picker mode="date" :value="occurrenceEndDate" @change="e => (occurrenceEndDate = e.detail.value)">
+                    <view class="value mini">{{ occurrenceEndDate || '结束日期' }}</view>
+                  </picker>
+                  <picker mode="time" :value="occurrenceEndTime" @change="e => (occurrenceEndTime = e.detail.value)">
+                    <view class="value mini">{{ occurrenceEndTime || '结束时间' }}</view>
+                  </picker>
+                </view>
               </view>
             </view>
           </view>
@@ -132,15 +140,15 @@
       <!-- 第 2 步：问题描述 -->
       <view v-if="step === 2" class="step-panel">
         <view class="pm-card form-card">
-          <text class="label required">问题描述</text>
+          <text class="card-title">问题描述</text>
           <textarea
             v-model="form.problemDescription"
             class="textarea"
             maxlength="4000"
             placeholder="请尽量描述清楚，减少无效沟通"
           />
-          <text class="label sub">图片附件（可选拍照/相册）</text>
-          <image-uploader v-model="form.problemImages" />
+          <text class="label sub">上传照片</text>
+          <image-uploader v-model="form.problemAttachments" />
           <text v-if="form.abnormalType === '客诉'" class="card-tip danger">
             客诉类问题必须上传附件，请在问题描述中上传相关附件
           </text>
@@ -150,15 +158,15 @@
       <!-- 第 3 步：处理要求 -->
       <view v-if="step === 3" class="step-panel">
         <view class="pm-card form-card">
-          <text class="label required">处理要求</text>
+          <text class="card-title">处理要求</text>
           <textarea
             v-model="form.demand"
             class="textarea"
             maxlength="4000"
             placeholder="请说明你希望的解决方案和验收标准"
           />
-          <text class="label sub">图片附件（可选拍照/相册）</text>
-          <image-uploader v-model="form.demandImages" />
+          <text class="label sub">上传照片</text>
+          <image-uploader v-model="form.demandAttachments" />
         </view>
       </view>
 
@@ -213,9 +221,9 @@ const form = reactive({
   complaintDeptId: undefined,
   complaintUserId: undefined,
   afterSalesExt: buildAfterSalesExtDefaults(),
-  // 图片 URL 数组，提交时与文字组合成 HTML
-  problemImages: [],
-  demandImages: []
+  // 附件列表，提交时与文字组合成 HTML
+  problemAttachments: [],
+  demandAttachments: []
 })
 
 const deptTree = ref([])
@@ -410,10 +418,10 @@ function validateBasic() {
 
 function validateDescription() {
   const text = String(form.problemDescription || '').trim()
-  const hasImg = (form.problemImages || []).length > 0
-  if (!text && !hasImg) return '请填写问题描述或上传图片'
+  const hasAtta = (form.problemAttachments || []).length > 0
+  if (!text && !hasAtta) return '请填写问题描述或上传附件'
   if (form.abnormalType === '客诉') {
-    const html = buildRichHtml(form.problemDescription, form.problemImages)
+    const html = buildRichHtml(form.problemDescription, form.problemAttachments)
     if (!hasMediaInHtml(html)) return '客诉类问题必须上传图片或附件'
   }
   return ''
@@ -421,8 +429,8 @@ function validateDescription() {
 
 function validateDemand() {
   const text = String(form.demand || '').trim()
-  const hasImg = (form.demandImages || []).length > 0
-  if (!text && !hasImg) return '请填写处理要求或上传图片'
+  const hasAtta = (form.demandAttachments || []).length > 0
+  if (!text && !hasAtta) return '请填写处理要求或上传附件'
   return ''
 }
 
@@ -473,8 +481,8 @@ async function doSubmit() {
   if (submitting.value) return
   submitting.value = true
   try {
-    const problemHtml = buildRichHtml(form.problemDescription, form.problemImages)
-    const demandHtml = buildRichHtml(form.demand, form.demandImages)
+    const problemHtml = buildRichHtml(form.problemDescription, form.problemAttachments)
+    const demandHtml = buildRichHtml(form.demand, form.demandAttachments)
     const payload = {
       fid: form.fid,
       fbillno: form.fbillno,
@@ -510,11 +518,7 @@ async function loadData() {
       listUser({ pageNum: 1, pageSize: 500 })
     ])
 
-    // eslint-disable-next-line no-console
-    console.log('[add-feedback] listDept raw:', JSON.stringify(deptRes).slice(0, 800))
     const rows = normalizeDeptList(deptRes)
-    // eslint-disable-next-line no-console
-    console.log('[add-feedback] normalized depts:', rows.length, rows.slice(0, 5))
     deptFlat.value = rows
     deptTree.value = []
     rows.forEach((d) => {
@@ -584,10 +588,13 @@ watch(() => form.abnormalType, (val, oldVal) => {
   height: 100vh;
   height: calc(100vh - var(--window-bottom, 0px));
   overflow: hidden;
+  background: $pm-bg;
 }
+
+/* 项目信息头卡 */
 .head-card {
   margin: 16rpx 24rpx 0;
-  padding: 28rpx 30rpx;
+  padding: 24rpx 28rpx;
   background: $pm-grad-hero;
   border-radius: $pm-radius-lg;
   box-shadow: $pm-shadow;
@@ -607,7 +614,7 @@ watch(() => form.abnormalType, (val, oldVal) => {
 }
 .head-title {
   display: block;
-  font-size: 34rpx;
+  font-size: 32rpx;
   font-weight: 750;
   color: $pm-surface;
   position: relative;
@@ -617,7 +624,7 @@ watch(() => form.abnormalType, (val, oldVal) => {
   display: flex;
   flex-direction: row;
   align-items: center;
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   position: relative;
   z-index: 1;
 }
@@ -630,12 +637,13 @@ watch(() => form.abnormalType, (val, oldVal) => {
   color: rgba($pm-surface, 0.45);
 }
 
+/* 步骤条 */
 .step-bar {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   justify-content: center;
-  padding: 28rpx 32rpx 16rpx;
+  padding: 24rpx 32rpx 12rpx;
 }
 .step {
   display: flex;
@@ -646,8 +654,8 @@ watch(() => form.abnormalType, (val, oldVal) => {
   min-width: 120rpx;
 }
 .step-dot {
-  width: 48rpx;
-  height: 48rpx;
+  width: 44rpx;
+  height: 44rpx;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -671,7 +679,7 @@ watch(() => form.abnormalType, (val, oldVal) => {
   border-color: $pm-sage;
 }
 .step-name {
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   font-size: 24rpx;
   color: $pm-muted;
   font-weight: 650;
@@ -684,27 +692,28 @@ watch(() => form.abnormalType, (val, oldVal) => {
   width: 96rpx;
   height: 2rpx;
   background: $pm-line;
-  margin: 24rpx 12rpx 0;
+  margin: 22rpx 12rpx 0;
 }
 .step.done + .step-line,
 .step-line.active {
   background: $pm-sage;
 }
 
+/* 滚动内容区 */
 .add-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding: 16rpx 24rpx;
+  padding: 12rpx 24rpx;
 }
 .step-panel {
   min-height: 0;
 }
 .form-card {
-  margin-bottom: 24rpx;
-  padding: 26rpx 28rpx;
+  margin-bottom: 20rpx;
+  padding: 24rpx;
   background: $pm-surface;
   border-radius: $pm-radius-lg;
   box-shadow: $pm-shadow;
@@ -729,11 +738,11 @@ watch(() => form.abnormalType, (val, oldVal) => {
   background: $pm-grad-brand;
 }
 .card-tip {
-  padding: 16rpx 20rpx;
-  border-radius: 18rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 16rpx;
   font-size: 24rpx;
   line-height: 1.5;
-  margin-bottom: 22rpx;
+  margin-bottom: 20rpx;
 }
 .card-tip.danger {
   color: $pm-danger;
@@ -746,27 +755,21 @@ watch(() => form.abnormalType, (val, oldVal) => {
   color: $pm-muted;
 }
 
-.field-row {
+/* 单列字段堆叠 */
+.field-stack {
   display: flex;
-  flex-direction: row;
-  margin: 0 -12rpx;
+  flex-direction: column;
+  gap: 22rpx;
 }
 .field {
-  flex: 1;
-  padding: 0 12rpx;
-  margin-bottom: 26rpx;
+  width: 100%;
   box-sizing: border-box;
-  min-width: 0;
-}
-.field:last-child,
-.field-row:last-child .field {
-  margin-bottom: 0;
 }
 .label {
   display: block;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $pm-text-secondary;
-  margin-bottom: 12rpx;
+  margin-bottom: 10rpx;
   font-weight: 700;
 }
 .label.required::before {
@@ -775,7 +778,7 @@ watch(() => form.abnormalType, (val, oldVal) => {
   margin-right: 6rpx;
 }
 .label.sub {
-  margin-top: 24rpx;
+  margin-top: 20rpx;
   color: $pm-text-secondary;
   font-weight: 650;
 }
@@ -786,11 +789,11 @@ watch(() => form.abnormalType, (val, oldVal) => {
 .input {
   width: 100%;
   box-sizing: border-box;
-  min-height: 80rpx;
-  line-height: 80rpx;
-  padding: 0 24rpx;
+  min-height: 84rpx;
+  line-height: 84rpx;
+  padding: 0 26rpx;
   background: $pm-bg;
-  border-radius: 999rpx;
+  border-radius: 20rpx;
   font-size: 28rpx;
   color: $pm-text;
   border: 1px solid transparent;
@@ -810,7 +813,7 @@ watch(() => form.abnormalType, (val, oldVal) => {
 }
 .hint {
   display: block;
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   font-size: 22rpx;
   color: $pm-primary;
   line-height: 1.4;
@@ -851,52 +854,42 @@ watch(() => form.abnormalType, (val, oldVal) => {
   color: $pm-muted;
 }
 
-.ext-grid {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  margin: 0 -12rpx;
-}
-.ext-cell {
-  width: 50%;
-  padding: 0 12rpx;
-  box-sizing: border-box;
-  margin-bottom: 26rpx;
-  min-width: 0;
-}
-.ext-cell:nth-last-child(-n + 2) {
-  margin-bottom: 0;
-}
-.ext-cell.full {
-  width: 100%;
-  margin-bottom: 0;
-}
+/* 发生时间段：左右两栏 */
 .datetime-row {
   display: flex;
   flex-direction: row;
   align-items: center;
+  gap: 16rpx;
+}
+.datetime-half {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 12rpx;
 }
-.datetime-row .value {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-  padding: 0 12rpx;
-  font-size: 24rpx;
+.datetime-row .value.mini {
+  width: 100%;
   min-height: 72rpx;
   line-height: 72rpx;
+  padding: 0 16rpx;
+  text-align: center;
+  font-size: 26rpx;
+  border-radius: 16rpx;
 }
 .sep {
   color: $pm-muted;
   font-size: 24rpx;
+  flex-shrink: 0;
+  padding-top: 0;
 }
 
+/* 文本域 */
 .textarea {
   width: 100%;
-  min-height: 280rpx;
-  padding: 24rpx 28rpx;
+  min-height: 260rpx;
+  padding: 22rpx 26rpx;
   background: $pm-bg;
-  border-radius: 28rpx;
+  border-radius: 24rpx;
   font-size: 28rpx;
   box-sizing: border-box;
   line-height: 1.6;
@@ -907,6 +900,7 @@ watch(() => form.abnormalType, (val, oldVal) => {
   border-color: $pm-primary;
 }
 
+/* 底部按钮 */
 .foot-bar {
   flex-shrink: 0;
   display: flex;
@@ -918,30 +912,12 @@ watch(() => form.abnormalType, (val, oldVal) => {
 }
 .foot-bar button {
   flex: 1;
+  display: block;
+  width: 100%;
   margin: 0;
 }
-
-.confirm-card {
-  width: 560rpx;
-  padding: 32rpx;
-  background: $pm-surface;
-  border-radius: $pm-radius-lg;
-  box-shadow: $pm-shadow-lg;
-}
-.confirm-title {
-  display: block;
-  text-align: center;
-  font-size: 32rpx;
-  font-weight: 750;
-  color: $pm-text;
-  margin-bottom: 16rpx;
-}
-.confirm-body {
-  display: block;
-  font-size: 28rpx;
-  color: $pm-text-secondary;
-  line-height: 1.55;
-  margin-bottom: 28rpx;
+.foot-bar button::after {
+  border: none;
 }
 .pm-btn-secondary {
   display: block;
@@ -958,14 +934,6 @@ watch(() => form.abnormalType, (val, oldVal) => {
   box-shadow: $pm-shadow;
 }
 .pm-btn-secondary::after {
-  border: none;
-}
-.foot-bar button {
-  display: block;
-  width: 100%;
-  margin: 0;
-}
-.foot-bar button::after {
   border: none;
 }
 </style>

@@ -1,5 +1,5 @@
 /**
- * 简易富文本工具：移动端 textarea + 图片列表 ↔ PC 端 wangEditor HTML 兼容
+ * 简易富文本工具：移动端 textarea + 附件列表 ↔ PC 端 wangEditor HTML 兼容
  */
 
 const HTML_ESCAPE_MAP = {
@@ -15,25 +15,70 @@ export function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => HTML_ESCAPE_MAP[c] || c)
 }
 
+function isImageUrl(url) {
+  return /\.(jpg|jpeg|png|gif|webp|bmp)(\?.*)?$/i.test(String(url || ''))
+}
+
+function fileNameFromUrl(url) {
+  if (!url) return '附件'
+  try {
+    const u = new URL(url)
+    const name = decodeURIComponent(u.pathname.split('/').pop() || '')
+    return name || '附件'
+  } catch (e) {
+    const name = decodeURIComponent(String(url).split('?')[0].split('/').pop() || '')
+    return name || '附件'
+  }
+}
+
 /**
- * 把文字 + 图片 URL 数组组合成与 PC 端 wangEditor 兼容的 HTML
+ * 把附件项统一为 { url, name, type } 对象
+ * 支持传入 string / { url } / { url, name, type }
+ */
+export function normalizeAttachment(item) {
+  if (!item) return null
+  if (typeof item === 'string') {
+    return { url: item, name: fileNameFromUrl(item), type: isImageUrl(item) ? 'image' : 'file' }
+  }
+  const url = item.url || ''
+  const type = item.type || (isImageUrl(url) ? 'image' : 'file')
+  return { url, name: item.name || fileNameFromUrl(url), type }
+}
+
+/**
+ * 把文字 + 附件列表组合成与 PC 端 wangEditor 兼容的 HTML
+ * attachments 支持 string[] 或 {url, name?, type?}[]
  * 空内容返回空字符串，便于提交时判断是否必填
  */
-export function buildRichHtml(text, imageUrls = []) {
+export function buildRichHtml(text, attachments = []) {
   const t = String(text || '').trim()
   const paragraphs = t
     ? `<p>${escapeHtml(t)
         .replace(/\n/g, '<br/>')
         .replace(/(<br\/>)+/g, '</p><p>')}</p>`
     : ''
-  const images = (imageUrls || [])
+
+  const list = (attachments || [])
+    .map(normalizeAttachment)
     .filter(Boolean)
+
+  const images = list
+    .filter((a) => a.type === 'image')
     .map(
-      (url) =>
-        `<img src="${url}" style="max-width: 100%; height: auto; object-fit: contain; display: block; margin: 8px 0;" />`
+      (a) =>
+        `<img src="${a.url}" style="max-width: 100%; height: auto; object-fit: contain; display: block; margin: 8px 0;" />`
     )
     .join('')
-  return paragraphs + images
+
+  const files = list
+    .filter((a) => a.type !== 'image')
+    .map(
+      (a) =>
+        `<a href="${a.url}" target="_blank" download="${escapeHtml(a.name)}" data-w-e-type="attachment" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: #f5f5f5; border-radius: 8px; color: #0E5F3B; text-decoration: none; margin: 4px 0;">📎 ${escapeHtml(a.name)}</a>`
+    )
+    .join('')
+
+  return paragraphs + images + files
 }
 
 /**
