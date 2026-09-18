@@ -1,85 +1,184 @@
 <template>
-  <view class="pm-page">
+  <view class="pm-page add-page">
     <app-nav-bar title="添加反馈" />
-    <view class="form">
-      <view class="pm-card">
-        <text class="pm-card-title">{{ projectTitle }}</text>
-        <view class="pm-card-meta">FID：{{ form.fid || '-' }} · 订单：{{ form.fbillno || '-' }}</view>
+
+    <view class="head-card">
+      <text class="head-title">{{ projectTitle }}</text>
+      <view class="head-meta">
+        <text class="meta">FID：{{ form.fid || '-' }}</text>
+        <text class="dot">·</text>
+        <text class="meta">订单：{{ form.fbillno || '-' }}</text>
+      </view>
+    </view>
+
+    <!-- 步骤条 -->
+    <view class="step-bar">
+      <view
+        v-for="(s, i) in steps"
+        :key="i"
+        class="step"
+        :class="{ active: step === i + 1, done: step > i + 1 }"
+      >
+        <view class="step-dot">{{ i + 1 }}</view>
+        <text class="step-name">{{ s }}</text>
+        <view v-if="i < steps.length - 1" class="step-line" />
+      </view>
+    </view>
+
+    <view class="add-body">
+      <!-- 第 1 步：基础信息 -->
+      <view v-if="step === 1" class="step-panel">
+        <view class="pm-card form-card">
+          <view class="field-row">
+            <view class="field half">
+              <text class="label required">异常类型</text>
+              <picker :range="abnormalLabels" :value="abnormalIndex" @change="onAbnormal">
+                <view class="value">{{ abnormalLabels[abnormalIndex] || '请选择' }}</view>
+              </picker>
+            </view>
+            <view class="field half">
+              <text class="label">问题类型</text>
+              <picker :range="problemLabels" :value="problemIndex" :disabled="!problemOptions.length" @change="onProblem">
+                <view class="value" :class="{ muted: !problemOptions.length }">{{ problemLabels[problemIndex] || '请选择' }}</view>
+              </picker>
+            </view>
+          </view>
+
+          <view class="field-row">
+            <view class="field half">
+              <text class="label required">处理部门</text>
+              <dept-tree-picker v-model="form.deptId" :depts="deptFlat" :disabled="isDeptLocked" @change="onDept" />
+              <text v-if="deptLockHint" class="hint warn">{{ deptLockHint }}</text>
+              <text v-else-if="handlerPairDisplay && handlerPairDisplay !== '-'" class="hint">
+                处理人/负责人：{{ handlerPairDisplay }}
+              </text>
+            </view>
+            <view class="field half">
+              <text class="label required">期望完成日期</text>
+              <picker mode="date" :value="form.demandFinishTime" :start="today" @change="onFinishDate">
+                <view class="value">{{ form.demandFinishTime || '请选择' }}</view>
+              </picker>
+              <text v-if="urgencyName" class="hint">
+                紧急程度：
+                <text class="urgency-chip" :class="urgencyTone">{{ urgencyName }}</text>
+              </text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 客诉：被投诉部门 / 被投诉人 -->
+        <view v-if="form.abnormalType === '客诉'" class="pm-card form-card">
+          <view class="card-tip danger">
+            客诉附件必须是来自客户的投诉，客户的需求不算投诉
+          </view>
+          <view class="field-row">
+            <view class="field half">
+              <text class="label">被投诉部门</text>
+              <dept-tree-picker v-model="form.complaintDeptId" :depts="deptFlat" @change="onComplaintDept" />
+            </view>
+            <view class="field half">
+              <text class="label">被投诉人</text>
+              <picker :range="complaintUserLabels" :value="complaintUserIndex" @change="onComplaintUser">
+                <view class="value">{{ complaintUserLabels[complaintUserIndex] || '请选择' }}</view>
+              </picker>
+            </view>
+          </view>
+          <text class="card-foot">被投诉部门与被投诉人至少填一项</text>
+        </view>
+
+        <!-- 售后：扩展字段 -->
+        <view v-if="form.abnormalType === '售后'" class="pm-card form-card">
+          <text class="card-title">售后信息</text>
+          <view class="ext-grid">
+            <view v-for="f in visibleExtFields" :key="f.prop" class="ext-cell">
+              <text class="label" :class="{ required: f.required }">{{ f.label }}</text>
+              <input
+                v-if="f.type === 'input'"
+                v-model="form.afterSalesExt[f.prop]"
+                class="input"
+                :placeholder="f.placeholder || '请输入' + f.label"
+                :maxlength="f.maxLength || -1"
+              />
+              <input
+                v-else-if="f.type === 'number'"
+                v-model="form.afterSalesExt[f.prop]"
+                class="input"
+                type="digit"
+                :placeholder="f.placeholder || '请输入' + f.label"
+              />
+            </view>
+            <view class="ext-cell full">
+              <text class="label required">发生时间段</text>
+              <view class="datetime-row">
+                <picker mode="date" :value="occurrenceStartDate" @change="e => (occurrenceStartDate = e.detail.value)">
+                  <view class="value mini">{{ occurrenceStartDate || '开始日期' }}</view>
+                </picker>
+                <picker mode="time" :value="occurrenceStartTime" @change="e => (occurrenceStartTime = e.detail.value)">
+                  <view class="value mini">{{ occurrenceStartTime || '开始时间' }}</view>
+                </picker>
+                <text class="sep">至</text>
+                <picker mode="date" :value="occurrenceEndDate" @change="e => (occurrenceEndDate = e.detail.value)">
+                  <view class="value mini">{{ occurrenceEndDate || '结束日期' }}</view>
+                </picker>
+                <picker mode="time" :value="occurrenceEndTime" @change="e => (occurrenceEndTime = e.detail.value)">
+                  <view class="value mini">{{ occurrenceEndTime || '结束时间' }}</view>
+                </picker>
+              </view>
+            </view>
+          </view>
+        </view>
       </view>
 
-      <view class="pm-card">
-        <view class="field">
-          <text class="label required">异常类型</text>
-          <picker :range="abnormalLabels" :value="abnormalIndex" @change="onAbnormal">
-            <view class="value">{{ abnormalLabels[abnormalIndex] || '请选择' }}</view>
-          </picker>
-        </view>
-        <view class="field">
-          <text class="label">问题类型</text>
-          <picker :range="problemLabels" :value="problemIndex" :disabled="!problemOptions.length" @change="onProblem">
-            <view class="value">{{ problemLabels[problemIndex] || '请选择' }}</view>
-          </picker>
-        </view>
-        <view class="field">
-          <text class="label required">处理部门</text>
-          <picker :range="deptLabels" :value="deptIndex" @change="onDept">
-            <view class="value">{{ deptLabels[deptIndex] || '请选择' }}</view>
-          </picker>
-          <text v-if="handlerHint" class="hint">处理人/负责人：{{ handlerHint }}</text>
-        </view>
-        <view class="field">
-          <text class="label required">期望完成日期</text>
-          <picker mode="date" :value="form.demandFinishTime" :start="today" @change="onFinishDate">
-            <view class="value">{{ form.demandFinishTime || '请选择' }}</view>
-          </picker>
-          <text v-if="urgencyText" class="hint">紧急程度：{{ urgencyText }}</text>
-        </view>
-      </view>
-
-      <view v-if="form.abnormalType === '售后'" class="pm-card">
-        <view v-for="f in extFields" :key="f.prop" class="field">
-          <text class="label" :class="{ required: f.required }">{{ f.label }}</text>
-          <template v-if="f.type === 'datetimerange'">
-            <picker mode="date" :value="extStart" @change="(e) => (extStart = e.detail.value)">
-              <view class="value">开始：{{ extStart || '选择' }}</view>
-            </picker>
-            <picker mode="date" :value="extEnd" @change="(e) => (extEnd = e.detail.value)">
-              <view class="value">结束：{{ extEnd || '选择' }}</view>
-            </picker>
-          </template>
-          <input
-            v-else
-            v-model="form.afterSalesExt[f.prop]"
-            class="input"
-            :type="f.type === 'number' ? 'digit' : 'text'"
-            :placeholder="f.label"
-          />
-        </view>
-      </view>
-
-      <view class="pm-card">
-        <view class="field">
+      <!-- 第 2 步：问题描述 -->
+      <view v-if="step === 2" class="step-panel">
+        <view class="pm-card form-card">
           <text class="label required">问题描述</text>
-          <textarea v-model="form.problemDescription" class="textarea" maxlength="4000" placeholder="请输入问题描述" />
-        </view>
-        <view class="field">
-          <text class="label required">处理要求</text>
-          <textarea v-model="form.demand" class="textarea" maxlength="4000" placeholder="请输入处理要求" />
+          <textarea
+            v-model="form.problemDescription"
+            class="textarea"
+            maxlength="4000"
+            placeholder="请尽量描述清楚，减少无效沟通"
+          />
+          <text class="label sub">图片附件（可选拍照/相册）</text>
+          <image-uploader v-model="form.problemImages" />
+          <text v-if="form.abnormalType === '客诉'" class="card-tip danger">
+            客诉类问题必须上传附件，请在问题描述中上传相关附件
+          </text>
         </view>
       </view>
 
-      <button class="pm-btn-primary submit" :loading="submitting" :disabled="submitting" @click="submit">
-        提交反馈
-      </button>
+      <!-- 第 3 步：处理要求 -->
+      <view v-if="step === 3" class="step-panel">
+        <view class="pm-card form-card">
+          <text class="label required">处理要求</text>
+          <textarea
+            v-model="form.demand"
+            class="textarea"
+            maxlength="4000"
+            placeholder="请说明你希望的解决方案和验收标准"
+          />
+          <text class="label sub">图片附件（可选拍照/相册）</text>
+          <image-uploader v-model="form.demandImages" />
+        </view>
+      </view>
+
       <view class="pm-safe-bottom" />
     </view>
+
+    <!-- 底部按钮 -->
+    <view class="foot-bar">
+      <button v-if="step > 1" class="pm-btn-secondary" @click="prevStep">上一步</button>
+      <button v-if="step < 3" class="pm-btn-primary" @click="nextStep">下一步</button>
+      <button v-else class="pm-btn-primary" :loading="submitting" :disabled="submitting" @click="submit">提交反馈</button>
+    </view>
+
   </view>
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { listDept } from '@/api/system.js'
+import { listDept, listUser } from '@/api/system.js'
 import { addProductFeedbackList } from '@/api/after-sales.js'
 import { abnormalTypes, abnormalToProblems } from '@/constants/afterSales.js'
 import {
@@ -89,7 +188,15 @@ import {
   validateAfterSalesExt,
   AFTER_SALES_PROBLEM_DESCRIPTION_TEXT
 } from '@/utils/afterSalesExt.js'
-import { getUrgencyLabel } from '@/utils/urgencyDisplay.js'
+import { getUrgencyLabel, getUrgencyTone } from '@/utils/urgencyDisplay.js'
+import { normalizeDeptList, normalizeUserList } from '@/utils/apiResponse.js'
+import { buildRichHtml, hasMediaInHtml } from '@/utils/richText.js'
+import DeptTreePicker from '@/components/dept-tree-picker/dept-tree-picker.vue'
+import ImageUploader from '@/components/image-uploader/image-uploader.vue'
+
+const steps = ['基础信息', '问题描述', '处理要求']
+const step = ref(1)
+const submitting = ref(false)
 
 const form = reactive({
   fid: undefined,
@@ -103,88 +210,115 @@ const form = reactive({
   urgencyLevel: undefined,
   problemDescription: '',
   demand: '',
-  afterSalesExt: buildAfterSalesExtDefaults()
+  complaintDeptId: undefined,
+  complaintUserId: undefined,
+  afterSalesExt: buildAfterSalesExtDefaults(),
+  // 图片 URL 数组，提交时与文字组合成 HTML
+  problemImages: [],
+  demandImages: []
 })
 
-const submitting = ref(false)
+const deptTree = ref([])
 const deptFlat = ref([])
-const deptIndex = ref(-1)
+const deptMap = ref({})
+const userList = ref([])
+const complaintDeptIndex = ref(-1)
+const complaintUserIndex = ref(-1)
 const abnormalIndex = ref(-1)
 const problemIndex = ref(-1)
-const extStart = ref('')
-const extEnd = ref('')
-const extFields = afterSalesExtFields
+const deptIndex = ref(-1)
+
+// 售后发生时间段：日期 + 时间 分开选，提交时拼接
+const occurrenceStartDate = ref('')
+const occurrenceStartTime = ref('00:00')
+const occurrenceEndDate = ref('')
+const occurrenceEndTime = ref('23:59')
+
+const QUALITY_DEPT_NAME = '品质部'
 
 const today = (() => {
   const d = new Date()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return d.getFullYear() + '-' + m + '-' + day
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const projectTitle = computed(() => {
-  return (form._customer || '项目') + ' - 反馈'
-})
-
+const projectTitle = computed(() => (form._customer ? form._customer + ' - 反馈' : '添加反馈'))
 const abnormalLabels = abnormalTypes.map((a) => a.label)
 const problemOptions = computed(() => abnormalToProblems[form.abnormalType] || [])
 const problemLabels = computed(() => problemOptions.value.map((p) => p.label))
 const deptLabels = computed(() => deptFlat.value.map((d) => d.deptName))
-const handlerHint = computed(() => {
-  if (!form.theFirstHandlerId && !form.interventionPersonnelId) return ''
-  return (form._handlerName || '') + '/' + (form._leaderName || '')
+
+// 从实际可选列表中查找品质部（避免 deptMap 构建时机/ key 类型问题）
+const qualityDeptId = computed(() => {
+  const found = deptFlat.value.find((d) => {
+    const name = String(d.deptName || '').trim()
+    return name === QUALITY_DEPT_NAME || name.includes(QUALITY_DEPT_NAME)
+  })
+  return found ? Number(found.deptId) : undefined
 })
-const urgencyText = computed(() => getUrgencyLabel(form.urgencyLevel))
 
-function flattenDepts(nodes, out) {
-  ;(nodes || []).forEach((n) => {
-    const name = n.deptName || ''
-    if (name && name.indexOf('研成工业') < 0 && name.indexOf('待设置部门') < 0) {
-      out.push(n)
-    }
-    if (n.children && n.children.length) flattenDepts(n.children, out)
-  })
-}
+const isDeptLocked = computed(() => {
+  if (!qualityDeptId.value) return false
+  return form.abnormalType === '售后' || form.abnormalType === '客诉'
+})
 
-function useDeptList(list) {
-  // listDept may return flat or tree; normalize
-  if (!list || !list.length) return []
-  if (list[0].children) {
-    const out = []
-    flattenDepts(list, out)
-    return out
+const deptLockHint = computed(() => {
+  if ((form.abnormalType === '售后' || form.abnormalType === '客诉') && !qualityDeptId.value) {
+    return `未找到${QUALITY_DEPT_NAME}，请手动选择`
   }
-  return list.filter((n) => {
-    const name = n.deptName || ''
-    return name.indexOf('研成工业') < 0 && name.indexOf('待设置部门') < 0
-  })
+  if (!isDeptLocked.value) return ''
+  return `已自动选择${QUALITY_DEPT_NAME}`
+})
+
+const complaintDeptLabels = computed(() => ['请选择'].concat(deptFlat.value.map((d) => d.deptName)))
+const complaintUserLabels = computed(() => ['请选择'].concat(userList.value.map((u) => userDisplayName(u))))
+
+const visibleExtFields = computed(() => afterSalesExtFields.filter((f) => f.prop !== 'occurrenceTimeRange'))
+
+const urgencyName = computed(() => getUrgencyLabel(form.urgencyLevel))
+const urgencyTone = computed(() => getUrgencyTone(form.urgencyLevel))
+
+function userDisplayName(u) {
+  const name = u.nickName || u.userName || ''
+  const deptName = (deptMap.value[u.deptId] && deptMap.value[u.deptId].deptName) || ''
+  return deptName ? `${name}（${deptName}）` : name
 }
 
-async function loadDepts() {
-  const res = await listDept({ queryDeptAllName: true })
-  deptFlat.value = useDeptList(res.data || [])
-}
-
-function findDept(id) {
-  return deptFlat.value.find((d) => Number(d.deptId) === Number(id))
+function findNearestDeptWithLeader(currentDeptId) {
+  if (!currentDeptId && currentDeptId !== 0) return null
+  const deptId = Number(currentDeptId)
+  if (!Number.isFinite(deptId) || deptId <= 0) return null
+  const dept = deptMap.value[deptId]
+  if (!dept) return null
+  const leaderId = Number(dept.leader || 0)
+  if (leaderId > 0) return dept
+  const parentId = Number(dept.parentId || 0)
+  if (parentId > 0) return findNearestDeptWithLeader(parentId)
+  return null
 }
 
 function applyDeptHandlers(deptId) {
-  const dept = findDept(deptId)
-  if (!dept) {
+  const targetDept = findNearestDeptWithLeader(deptId)
+  if (!targetDept) {
     form.theFirstHandlerId = undefined
     form.interventionPersonnelId = undefined
-    form._handlerName = ''
-    form._leaderName = ''
     return
   }
-  const leaderId = Number(dept.leader || 0)
-  const firstHandlerId = Number(dept.firstContactUserId || 0)
+  const leaderId = Number(targetDept.leader || 0)
+  const firstHandlerId = Number(targetDept.firstContactUserId || 0)
   form.theFirstHandlerId = firstHandlerId > 0 ? firstHandlerId : leaderId > 0 ? leaderId : undefined
   form.interventionPersonnelId = leaderId > 0 ? leaderId : undefined
-  form._handlerName = dept.firstContactUserName || dept.leaderName || String(form.theFirstHandlerId || '')
-  form._leaderName = dept.leaderName || String(form.interventionPersonnelId || '')
 }
+
+const handlerPairDisplay = computed(() => {
+  const dept = findNearestDeptWithLeader(form.deptId)
+  if (!dept) return '-'
+  const a = (dept.viewInfo?.firstContactNameText || dept.firstContactUserName || '').trim()
+  const b = (dept.viewInfo?.leaderNameText || dept.leaderName || '').trim()
+  if (!a && !b) return '-'
+  if (a && b && a === b) return a
+  if (a && b) return `${a}/${b}`
+  return a || b
+})
 
 function calcUrgency(dateStr) {
   if (!dateStr) {
@@ -202,6 +336,19 @@ function calcUrgency(dateStr) {
   else form.urgencyLevel = '6'
 }
 
+function applyQualityDept() {
+  const id = qualityDeptId.value
+  if (!id || !isDeptLocked.value) return
+  if (form.deptId !== id) {
+    form.deptId = id
+    applyDeptHandlers(id)
+  }
+}
+
+function syncDeptIndex() {
+  deptIndex.value = deptFlat.value.findIndex((d) => Number(d.deptId) === Number(form.deptId))
+}
+
 function onAbnormal(e) {
   abnormalIndex.value = Number(e.detail.value)
   form.abnormalType = abnormalTypes[abnormalIndex.value].value
@@ -210,6 +357,10 @@ function onAbnormal(e) {
   if (form.abnormalType === '售后' && !form.problemDescription) {
     form.problemDescription = AFTER_SALES_PROBLEM_DESCRIPTION_TEXT
   }
+  nextTick(() => {
+    applyQualityDept()
+    syncDeptIndex()
+  })
 }
 
 function onProblem(e) {
@@ -217,10 +368,8 @@ function onProblem(e) {
   form.problemType = problemOptions.value[problemIndex.value].value
 }
 
-function onDept(e) {
-  deptIndex.value = Number(e.detail.value)
-  const d = deptFlat.value[deptIndex.value]
-  form.deptId = d ? d.deptId : undefined
+function onDept(deptId) {
+  form.deptId = deptId
   applyDeptHandlers(form.deptId)
 }
 
@@ -229,54 +378,121 @@ function onFinishDate(e) {
   calcUrgency(form.demandFinishTime)
 }
 
-async function submit() {
-  if (!form.abnormalType) {
-    uni.showToast({ title: '请选择异常类型', icon: 'none' })
-    return
-  }
-  if (!form.deptId) {
-    uni.showToast({ title: '请选择处理部门', icon: 'none' })
-    return
-  }
-  if (!form.demandFinishTime) {
-    uni.showToast({ title: '请选择期望完成日期', icon: 'none' })
-    return
-  }
-  if (!form.problemDescription || !String(form.problemDescription).trim()) {
-    uni.showToast({ title: '请填写问题描述', icon: 'none' })
-    return
-  }
-  if (!form.demand || !String(form.demand).trim()) {
-    uni.showToast({ title: '请填写处理要求', icon: 'none' })
-    return
+function onComplaintDept(deptId) {
+  form.complaintDeptId = deptId
+}
+
+function onComplaintUser(e) {
+  complaintUserIndex.value = Number(e.detail.value)
+  const idx = complaintUserIndex.value - 1
+  const u = userList.value[idx]
+  form.complaintUserId = u ? u.userId : undefined
+}
+
+function validateBasic() {
+  if (!form.abnormalType) return '请选择异常类型'
+  if (problemOptions.value.length && !form.problemType) return '请选择问题类型'
+  if (!form.deptId) return '请选择处理部门'
+  if (!form.demandFinishTime) return '请选择期望完成日期'
+  if (form.abnormalType === '客诉') {
+    if (!form.complaintDeptId && !form.complaintUserId) return '请选择被投诉部门或被投诉人'
   }
   if (form.abnormalType === '售后') {
-    form.afterSalesExt.occurrenceTimeRange = [extStart.value, extEnd.value]
+    form.afterSalesExt.occurrenceTimeRange = [
+      occurrenceStartDate.value && occurrenceStartTime.value ? `${occurrenceStartDate.value} ${occurrenceStartTime.value}:00` : '',
+      occurrenceEndDate.value && occurrenceEndTime.value ? `${occurrenceEndDate.value} ${occurrenceEndTime.value}:00` : ''
+    ]
     const err = validateAfterSalesExt(form.afterSalesExt)
-    if (err) {
-      uni.showToast({ title: err, icon: 'none' })
-      return
+    if (err) return err
+  }
+  return ''
+}
+
+function validateDescription() {
+  const text = String(form.problemDescription || '').trim()
+  const hasImg = (form.problemImages || []).length > 0
+  if (!text && !hasImg) return '请填写问题描述或上传图片'
+  if (form.abnormalType === '客诉') {
+    const html = buildRichHtml(form.problemDescription, form.problemImages)
+    if (!hasMediaInHtml(html)) return '客诉类问题必须上传图片或附件'
+  }
+  return ''
+}
+
+function validateDemand() {
+  const text = String(form.demand || '').trim()
+  const hasImg = (form.demandImages || []).length > 0
+  if (!text && !hasImg) return '请填写处理要求或上传图片'
+  return ''
+}
+
+function nextStep() {
+  if (step.value === 1) {
+    const err = validateBasic()
+    if (err) return uni.showToast({ title: err, icon: 'none' })
+  }
+  if (step.value === 2) {
+    const err = validateDescription()
+    if (err) return uni.showToast({ title: err, icon: 'none' })
+  }
+  if (step.value < 3) step.value++
+}
+
+function prevStep() {
+  if (step.value > 1) step.value--
+}
+
+const confirmMessage = computed(() => {
+  const dept = deptMap.value[form.deptId]
+  const deptName = dept ? dept.deptName : '所选'
+  const handlers = handlerPairDisplay.value
+  return `您正在给${deptName}部门-${handlers}反馈问题。提交后不支持修改，请确认。`
+})
+
+function submit() {
+  const err = validateDemand()
+  if (err) return uni.showToast({ title: err, icon: 'none' })
+  if (form.abnormalType === '售后') {
+    form.afterSalesExt.occurrenceTimeRange = [
+      occurrenceStartDate.value && occurrenceStartTime.value ? `${occurrenceStartDate.value} ${occurrenceStartTime.value}:00` : '',
+      occurrenceEndDate.value && occurrenceEndTime.value ? `${occurrenceEndDate.value} ${occurrenceEndTime.value}:00` : ''
+    ]
+  }
+  uni.showModal({
+    title: '确认提交',
+    content: confirmMessage.value,
+    confirmText: '确认提交',
+    cancelText: '再想想',
+    success: (res) => {
+      if (res.confirm) doSubmit()
     }
-  }
-  calcUrgency(form.demandFinishTime)
+  })
+}
 
-  const payload = {
-    fid: form.fid,
-    fbillno: form.fbillno,
-    deptId: form.deptId,
-    theFirstHandlerId: form.theFirstHandlerId,
-    interventionPersonnelId: form.interventionPersonnelId,
-    abnormalType: form.abnormalType,
-    problemType: form.problemType,
-    demandFinishTime: form.demandFinishTime,
-    urgencyLevel: form.urgencyLevel,
-    problemDescription: form.problemDescription,
-    demand: form.demand,
-    afterSalesExt: form.abnormalType === '售后' ? serializeAfterSalesExt(form.afterSalesExt) : undefined
-  }
-
+async function doSubmit() {
+  if (submitting.value) return
   submitting.value = true
   try {
+    const problemHtml = buildRichHtml(form.problemDescription, form.problemImages)
+    const demandHtml = buildRichHtml(form.demand, form.demandImages)
+    const payload = {
+      fid: form.fid,
+      fbillno: form.fbillno,
+      deptId: form.deptId,
+      theFirstHandlerId: form.theFirstHandlerId,
+      interventionPersonnelId: form.interventionPersonnelId,
+      abnormalType: form.abnormalType,
+      problemType: form.problemType,
+      demandFinishTime: form.demandFinishTime,
+      urgencyLevel: form.urgencyLevel,
+      problemDescription: problemHtml || undefined,
+      demand: demandHtml || undefined,
+      complaintDeptIds: form.abnormalType === '客诉' ? (form.complaintDeptId ? [form.complaintDeptId] : []) : [],
+      complaintUserIds: form.abnormalType === '客诉' ? (form.complaintUserId ? [form.complaintUserId] : []) : []
+    }
+    if (form.abnormalType === '售后') {
+      payload.afterSalesExt = serializeAfterSalesExt(form.afterSalesExt)
+    }
     await addProductFeedbackList(payload)
     uni.showToast({ title: '添加成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 500)
@@ -284,6 +500,40 @@ async function submit() {
     uni.showToast({ title: (e && e.message) || '提交失败', icon: 'none' })
   } finally {
     submitting.value = false
+  }
+}
+
+async function loadData() {
+  try {
+    const [deptRes, userRes] = await Promise.all([
+      listDept({ queryDeptAllName: true }),
+      listUser({ pageNum: 1, pageSize: 500 })
+    ])
+
+    // eslint-disable-next-line no-console
+    console.log('[add-feedback] listDept raw:', JSON.stringify(deptRes).slice(0, 800))
+    const rows = normalizeDeptList(deptRes)
+    // eslint-disable-next-line no-console
+    console.log('[add-feedback] normalized depts:', rows.length, rows.slice(0, 5))
+    deptFlat.value = rows
+    deptTree.value = []
+    rows.forEach((d) => {
+      const id = Number(d.deptId)
+      if (id > 0) deptMap.value[id] = d
+    })
+
+    userList.value = normalizeUserList(userRes)
+
+    if (!rows.length) {
+      uni.showToast({ title: '未获取到有效部门，请检查权限或联系管理员', icon: 'none', duration: 3000 })
+    }
+
+    applyQualityDept()
+    syncDeptIndex()
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[add-feedback] loadData error:', e)
+    uni.showToast({ title: (e && e.message) || '数据加载失败', icon: 'none', duration: 3000 })
   }
 }
 
@@ -296,67 +546,426 @@ onLoad(async (q) => {
       form._customer = p.fshortname
     }
   } catch (e) {}
-  try {
-    await loadDepts()
-  } catch (e) {
-    uni.showToast({ title: '部门加载失败', icon: 'none' })
+  await loadData()
+})
+
+watch(() => form.abnormalType, (val, oldVal) => {
+  if (val !== oldVal) {
+    form.problemType = ''
+    problemIndex.value = -1
+    form.complaintDeptId = undefined
+    form.complaintUserId = undefined
+    complaintDeptIndex.value = -1
+    complaintUserIndex.value = -1
   }
+  if (oldVal === '售后' && val !== '售后') {
+    form.afterSalesExt = buildAfterSalesExtDefaults()
+    occurrenceStartDate.value = ''
+    occurrenceStartTime.value = '00:00'
+    occurrenceEndDate.value = ''
+    occurrenceEndTime.value = '23:59'
+  }
+  if (val === '售后' && (!form.problemDescription || form.problemDescription === AFTER_SALES_PROBLEM_DESCRIPTION_TEXT)) {
+    form.problemDescription = AFTER_SALES_PROBLEM_DESCRIPTION_TEXT
+  }
+  nextTick(() => {
+    applyQualityDept()
+    syncDeptIndex()
+  })
 })
 </script>
 
 <style lang="scss" scoped>
 @import '@/uni.scss';
 
-.form {
-  padding: 16rpx 24rpx 48rpx;
+.add-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: calc(100vh - var(--window-bottom, 0px));
+  overflow: hidden;
+}
+.head-card {
+  margin: 16rpx 24rpx 0;
+  padding: 28rpx 30rpx;
+  background: $pm-grad-hero;
+  border-radius: $pm-radius-lg;
+  box-shadow: $pm-shadow;
+  position: relative;
+  overflow: hidden;
+}
+.head-card::after {
+  content: '';
+  position: absolute;
+  right: -40rpx;
+  top: -40rpx;
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+.head-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 750;
+  color: $pm-surface;
+  position: relative;
+  z-index: 1;
+}
+.head-meta {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 10rpx;
+  position: relative;
+  z-index: 1;
+}
+.meta {
+  font-size: 22rpx;
+  color: rgba($pm-surface, 0.82);
+}
+.dot {
+  margin: 0 10rpx;
+  color: rgba($pm-surface, 0.45);
+}
+
+.step-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28rpx 32rpx 16rpx;
+}
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  min-width: 120rpx;
+}
+.step-dot {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 750;
+  color: $pm-muted;
+  background: $pm-bg-2;
+  border: 2rpx solid $pm-line;
+  box-sizing: border-box;
+}
+.step.active .step-dot {
+  background: $pm-primary;
+  color: $pm-surface;
+  border-color: $pm-primary;
+  box-shadow: 0 4rpx 12rpx -2rpx rgba(14, 95, 59, 0.35);
+}
+.step.done .step-dot {
+  background: $pm-sage;
+  color: $pm-surface;
+  border-color: $pm-sage;
+}
+.step-name {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: $pm-muted;
+  font-weight: 650;
+}
+.step.active .step-name {
+  color: $pm-primary;
+  font-weight: 750;
+}
+.step-line {
+  width: 96rpx;
+  height: 2rpx;
+  background: $pm-line;
+  margin: 24rpx 12rpx 0;
+}
+.step.done + .step-line,
+.step-line.active {
+  background: $pm-sage;
+}
+
+.add-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding: 16rpx 24rpx;
+}
+.step-panel {
+  min-height: 0;
+}
+.form-card {
+  margin-bottom: 24rpx;
+  padding: 26rpx 28rpx;
+  background: $pm-surface;
+  border-radius: $pm-radius-lg;
+  box-shadow: $pm-shadow;
+}
+.card-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 750;
+  color: $pm-text;
+  margin-bottom: 24rpx;
+  padding-left: 18rpx;
+  position: relative;
+}
+.card-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8rpx;
+  bottom: 8rpx;
+  width: 6rpx;
+  border-radius: 6rpx;
+  background: $pm-grad-brand;
+}
+.card-tip {
+  padding: 16rpx 20rpx;
+  border-radius: 18rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  margin-bottom: 22rpx;
+}
+.card-tip.danger {
+  color: $pm-danger;
+  background: $pm-danger-soft;
+}
+.card-foot {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: $pm-muted;
+}
+
+.field-row {
+  display: flex;
+  flex-direction: row;
+  margin: 0 -12rpx;
 }
 .field {
-  margin-bottom: 22rpx;
+  flex: 1;
+  padding: 0 12rpx;
+  margin-bottom: 26rpx;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.field:last-child,
+.field-row:last-child .field {
+  margin-bottom: 0;
 }
 .label {
   display: block;
-  font-size: 22rpx;
-  color: $pm-muted;
+  font-size: 24rpx;
+  color: $pm-text-secondary;
   margin-bottom: 12rpx;
   font-weight: 700;
 }
 .label.required::before {
   content: '*';
   color: $pm-danger;
-  margin-right: 4rpx;
+  margin-right: 6rpx;
+}
+.label.sub {
+  margin-top: 24rpx;
+  color: $pm-text-secondary;
+  font-weight: 650;
+}
+.label.sub::before {
+  content: none;
 }
 .value,
 .input {
-  min-height: 84rpx;
-  line-height: 84rpx;
-  padding: 0 28rpx;
-  background: $pm-surface;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 80rpx;
+  line-height: 80rpx;
+  padding: 0 24rpx;
+  background: $pm-bg;
   border-radius: 999rpx;
   font-size: 28rpx;
   color: $pm-text;
-  box-shadow: $pm-shadow;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.textarea {
-  width: 100%;
-  min-height: 200rpx;
-  padding: 24rpx 28rpx;
+.value.muted,
+.value:empty::before {
+  color: $pm-ink-4;
+}
+.value.active,
+.input:focus {
   background: $pm-surface;
-  border-radius: 28rpx;
-  font-size: 28rpx;
-  box-sizing: border-box;
-  line-height: 1.55;
-  box-shadow: $pm-shadow;
+  border-color: $pm-primary;
+}
+.input {
+  border: none;
 }
 .hint {
   display: block;
   margin-top: 10rpx;
   font-size: 22rpx;
   color: $pm-primary;
+  line-height: 1.4;
+}
+.hint.warn {
+  color: $pm-warn;
+}
+.urgency-chip {
+  display: inline;
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
   font-weight: 700;
 }
-.submit {
-  margin-top: 24rpx;
-  height: 96rpx;
-  line-height: 96rpx;
+.urgency-chip.critical {
+  background: $pm-danger;
+  color: $pm-surface;
+}
+.urgency-chip.urgent {
+  background: $pm-danger-soft;
+  color: $pm-danger;
+}
+.urgency-chip.high {
+  background: $pm-warn-soft;
+  color: $pm-warn;
+}
+.urgency-chip.medium {
+  background: $pm-copper-soft;
+  color: $pm-copper;
+}
+.urgency-chip.normal {
+  background: $pm-info-soft;
+  color: $pm-info;
+}
+.urgency-chip.low,
+.urgency-chip.minor {
+  background: $pm-bg-2;
+  color: $pm-muted;
+}
+
+.ext-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin: 0 -12rpx;
+}
+.ext-cell {
+  width: 50%;
+  padding: 0 12rpx;
+  box-sizing: border-box;
+  margin-bottom: 26rpx;
+  min-width: 0;
+}
+.ext-cell:nth-last-child(-n + 2) {
+  margin-bottom: 0;
+}
+.ext-cell.full {
+  width: 100%;
+  margin-bottom: 0;
+}
+.datetime-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+}
+.datetime-row .value {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 0 12rpx;
+  font-size: 24rpx;
+  min-height: 72rpx;
+  line-height: 72rpx;
+}
+.sep {
+  color: $pm-muted;
+  font-size: 24rpx;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 280rpx;
+  padding: 24rpx 28rpx;
+  background: $pm-bg;
+  border-radius: 28rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+  line-height: 1.6;
+  border: 1px solid transparent;
+}
+.textarea:focus {
+  background: $pm-surface;
+  border-color: $pm-primary;
+}
+
+.foot-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 20rpx;
+  padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: $pm-surface;
+  border-top: 1px solid $pm-line;
+}
+.foot-bar button {
+  flex: 1;
+  margin: 0;
+}
+
+.confirm-card {
+  width: 560rpx;
+  padding: 32rpx;
+  background: $pm-surface;
+  border-radius: $pm-radius-lg;
+  box-shadow: $pm-shadow-lg;
+}
+.confirm-title {
+  display: block;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 750;
+  color: $pm-text;
+  margin-bottom: 16rpx;
+}
+.confirm-body {
+  display: block;
+  font-size: 28rpx;
+  color: $pm-text-secondary;
+  line-height: 1.55;
+  margin-bottom: 28rpx;
+}
+.pm-btn-secondary {
+  display: block;
+  width: 100%;
+  margin: 0;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: $pm-primary;
+  background: $pm-surface;
+  border: 1px solid $pm-primary;
+  box-shadow: $pm-shadow;
+}
+.pm-btn-secondary::after {
+  border: none;
+}
+.foot-bar button {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+.foot-bar button::after {
+  border: none;
 }
 </style>

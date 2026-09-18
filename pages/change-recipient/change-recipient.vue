@@ -19,6 +19,7 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getChangeRecipientCandidates, changeFeedbackRecipient } from '@/api/after-sales.js'
+import { extractArray } from '@/utils/apiResponse.js'
 
 const id = ref('')
 const candidates = ref([])
@@ -32,7 +33,7 @@ const labels = computed(() =>
 
 async function load() {
   const res = await getChangeRecipientCandidates(id.value)
-  candidates.value = res.data || []
+  candidates.value = extractArray(res)
 }
 
 function onPick(e) {

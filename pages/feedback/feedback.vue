@@ -221,6 +221,7 @@ import {
   formatHandlerPair,
   canRespondFeedbackRow
 } from '@/utils/feedbackWorkflow.js'
+import { normalizeDeptList, normalizeUserList } from '@/utils/apiResponse.js'
 import { getUrgencyLabel, getUrgencyTone, formatDateOnly } from '@/utils/urgencyDisplay.js'
 import {
   getRespondedTimeText,
@@ -387,29 +388,11 @@ function applyStatusFilter() {
   }
 }
 
-function flattenDepts(nodes, out) {
-  ;(nodes || []).forEach((n) => {
-    const name = n.deptName || ''
-    if (name && name.indexOf('研成工业') < 0 && name.indexOf('待设置部门') < 0) out.push(n)
-    if (n.children && n.children.length) flattenDepts(n.children, out)
-  })
-}
-
 async function loadDepts() {
   if (deptsLoaded.value) return
   try {
     const res = await listDept({ queryDeptAllName: true })
-    const data = res.data || []
-    if (data[0] && data[0].children) {
-      const out = []
-      flattenDepts(data, out)
-      deptFlat.value = out
-    } else {
-      deptFlat.value = data.filter((n) => {
-        const name = n.deptName || ''
-        return name.indexOf('研成工业') < 0 && name.indexOf('待设置部门') < 0
-      })
-    }
+    deptFlat.value = normalizeDeptList(res)
     deptsLoaded.value = true
   } catch (e) {
     /* 部门列表拉取失败不阻塞筛选 */
@@ -435,8 +418,7 @@ function onDept(e) {
 async function loadHandlers(deptId) {
   try {
     const res = await listUser({ deptId, pageNum: 1, pageSize: 999 })
-    const data = res.data || {}
-    handlerUsers.value = data.result || data.rows || []
+    handlerUsers.value = normalizeUserList(res)
   } catch (e) {
     handlerUsers.value = []
   }

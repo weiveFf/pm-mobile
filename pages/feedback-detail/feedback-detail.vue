@@ -1,12 +1,10 @@
 <template>
-  <view class="pm-page">
-    <app-nav-bar title="反馈详情" />
-
+  <view class="pm-page detail-page">
     <view v-if="fb" class="content">
       <view class="hero">
         <view class="hero-top">
           <view class="serial-pill">
-            <text>#{{ fb.serialNumber || fb.id }}</text>
+            <text>{{ serial }}</text>
           </view>
           <status-chip :text="statusLabel" :tone="statusTone" />
         </view>
@@ -38,8 +36,8 @@
         </view>
       </scroll-view>
 
-      <view v-show="activeTab === '问题描述'" class="panel body">{{ problemText || '暂无描述' }}</view>
-      <view v-show="activeTab === '处理要求'" class="panel body">{{ demandText || '暂无要求' }}</view>
+      <view v-show="activeTab === '问题描述'" class="panel body rich-body" v-html="problemHtml || '<p>暂无描述</p>'" @click="onRichClick($event, problemHtml)"></view>
+      <view v-show="activeTab === '处理要求'" class="panel body rich-body" v-html="demandHtml || '<p>暂无要求</p>'" @click="onRichClick($event, demandHtml)"></view>
 
       <view v-show="activeTab === '评论'" class="panel">
         <view v-for="c in comments" :key="c.id" class="bubble-row" :class="{ me: isMine(c) }">
@@ -114,6 +112,9 @@ import { getUrgencyLabel, formatDateOnly } from '@/utils/urgencyDisplay.js'
 import { splitFeedbackLogContent } from '@/utils/feedbackLogDisplay.js'
 import { afterSalesExtFields, hasAfterSalesExtData, deserializeAfterSalesExt } from '@/utils/afterSalesExt.js'
 import { FEEDBACK_WORKFLOW_STATUS } from '@/constants/feedbackWorkflow.js'
+import { extractArray } from '@/utils/apiResponse.js'
+import { fixRichTextImageUrls, extractImageSrcs } from '@/utils/richText.js'
+import { getBaseURL } from '@/utils/auth.js'
 
 const id = ref('')
 const loading = ref(false)
@@ -131,8 +132,15 @@ const statusKey = ref('')
 
 const urgencyLabel = computed(() => getUrgencyLabel(fb.value && fb.value.urgencyLevel))
 const handler = computed(() => formatHandlerPair(fb.value))
+const serial = computed(() => {
+  const v = String((fb.value && (fb.value.serialNumber || fb.value.id)) || '')
+  return '#' + v.replace(/^#/, '')
+})
 const problemText = computed(() => stripHtml(fb.value && fb.value.problemDescription))
 const demandText = computed(() => stripHtml(fb.value && fb.value.demand))
+const baseURL = getBaseURL()
+const problemHtml = computed(() => fixRichTextImageUrls(fb.value && fb.value.problemDescription, baseURL))
+const demandHtml = computed(() => fixRichTextImageUrls(fb.value && fb.value.demand, baseURL))
 const showExt = computed(() => {
   return fb.value && fb.value.abnormalType === '售后' && hasAfterSalesExtData(fb.value.afterSalesExt)
 })
@@ -178,6 +186,18 @@ function logDisplay(content) {
   return parts.remark ? parts.main + '；说明：' + parts.remark : parts.main
 }
 
+function onRichClick(e, html) {
+  const target = e.target
+  if (!target || target.tagName !== 'IMG') return
+  const urls = extractImageSrcs(html)
+  if (!urls.length) return
+  const current = target.src
+  uni.previewImage({
+    current,
+    urls
+  })
+}
+
 /** 自己的评论靠右(聊天气泡) */
 function isMine(c) {
   const uid = String(getUserId() || '')
@@ -205,7 +225,7 @@ async function load() {
     statusKey.value = display.status || ''
     statusTone.value = display.overdueType ? 'danger' : ''
     const cRes = await getFeedbackComments(id.value)
-    comments.value = cRes.data || []
+    comments.value = extractArray(cRes)
   } catch (e) {
     uni.showToast({ title: (e && e.message) || '加载失败', icon: 'none' })
   } finally {
@@ -220,7 +240,7 @@ async function sendComment() {
     await addFeedbackComment(id.value, { content: commentText.value.trim() })
     commentText.value = ''
     const cRes = await getFeedbackComments(id.value)
-    comments.value = cRes.data || []
+    comments.value = extractArray(cRes)
   } catch (e) {
     uni.showToast({ title: (e && e.message) || '发送失败', icon: 'none' })
   } finally {
@@ -302,8 +322,8 @@ onShow(() => {
 <style lang="scss" scoped>
 @import '@/uni.scss';
 
-.content {
-  padding: 8rpx 24rpx 150rpx;
+.detail-page .content {
+  padding: 32rpx 24rpx 150rpx;
 }
 .hero,
 .panel {
@@ -410,6 +430,16 @@ onShow(() => {
   line-height: 1.7;
   color: $pm-text;
   min-height: 160rpx;
+}
+.rich-body {
+  white-space: normal;
+}
+.rich-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 12rpx 0;
+  border-radius: 12rpx;
 }
 .bubble-row {
   display: flex;
@@ -551,5 +581,18 @@ onShow(() => {
 .dock-btn.warn {
   background: $pm-warn-soft;
   color: $pm-warn;
+}
+</style>
+
+<style lang="scss">
+@import '@/uni.scss';
+
+/* v-html 渲染的富文本图片全局样式，确保不撑出屏幕 */
+.rich-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 12rpx 0;
+  border-radius: 12rpx;
 }
 </style>

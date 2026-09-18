@@ -20,6 +20,7 @@ import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { listDept } from '@/api/system.js'
 import { reassignFeedbackDept } from '@/api/after-sales.js'
+import { normalizeDeptList } from '@/utils/apiResponse.js'
 
 const id = ref('')
 const depts = ref([])
@@ -29,26 +30,12 @@ const submitting = ref(false)
 
 const labels = computed(() => depts.value.map((d) => d.deptName))
 
-function flatten(nodes, out) {
-  ;(nodes || []).forEach((n) => {
-    const name = n.deptName || ''
-    if (name && name.indexOf('研成工业') < 0 && name.indexOf('待设置部门') < 0) out.push(n)
-    if (n.children) flatten(n.children, out)
-  })
-}
-
 async function load() {
-  const res = await listDept({ queryDeptAllName: true })
-  const data = res.data || []
-  if (data[0] && data[0].children) {
-    const out = []
-    flatten(data, out)
-    depts.value = out
-  } else {
-    depts.value = data.filter((n) => {
-      const name = n.deptName || ''
-      return name.indexOf('研成工业') < 0 && name.indexOf('待设置部门') < 0
-    })
+  try {
+    const res = await listDept({ queryDeptAllName: true })
+    depts.value = normalizeDeptList(res)
+  } catch (e) {
+    uni.showToast({ title: '部门加载失败', icon: 'none' })
   }
 }
 

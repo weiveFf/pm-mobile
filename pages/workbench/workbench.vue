@@ -23,7 +23,7 @@
     </view>
 
     <view class="wb-body">
-      <app-nav-bar title="工作台" :show-back="false" right-text="统计" @right="goStats" />
+      <app-nav-bar title="工作台" :show-back="false" />
 
     <!-- 问候栏(WB-01) -->
     <view class="gbar">
