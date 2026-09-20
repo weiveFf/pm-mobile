@@ -40,3 +40,23 @@ export function logoutApi() {
     method: 'POST'
   })
 }
+
+/** 企业微信网页授权 code 换 token（后端 /wechat/code-login，匿名接口） */
+export function weChatCodeLogin(data) {
+  return request({
+    url: '/wechat/code-login',
+    method: 'POST',
+    data,
+    skipAuthRedirect: true
+  })
+}
+
+/** 取企业微信网页授权链接（CorpId 由后端系统参数 wecom.corpId 提供，匿名接口） */
+export function getWecomOauthUrl(params) {
+  return request({
+    url: '/wechat/oauth-url',
+    method: 'GET',
+    params,
+    skipAuthRedirect: true
+  })
+}

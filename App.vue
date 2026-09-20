@@ -1,14 +1,21 @@
 <script>
 import { isLoggedIn } from '@/utils/auth.js'
 import { installNativeTitleSync, syncNativeTitle } from '@/utils/wxwork-title.js'
+import { wecomAutoLogin } from '@/utils/wecomAuth.js'
 
 export default {
   onLaunch() {
     // 微信/企微容器：页面切换时同步原生标题栏
     installNativeTitleSync()
   },
-  onShow() {
+  async onShow() {
     syncNativeTitle()
+    // 企业微信自建应用：优先静默授权免密登录（普通浏览器不受影响）
+    try {
+      await wecomAutoLogin()
+    } catch (e) {
+      /* 忽略，回落账号密码登录 */
+    }
     setTimeout(() => this.checkAuthRoute(), 80)
   },
   methods: {

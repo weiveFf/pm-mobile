@@ -46,7 +46,7 @@
 
     <!-- 吸底提交 -->
     <view class="bar">
-      <button
+      <button 
         class="pm-btn-primary submit"
         :class="{ off: !canSubmit }"
         :loading="submitting"
