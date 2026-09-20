@@ -44,6 +44,13 @@
       }
     },
     {
+      "path": "pages/opinion/opinion",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "意见反馈"
+      }
+    },
+    {
       "path": "pages/project-detail/project-detail",
       "style": {
         "navigationStyle": "custom",

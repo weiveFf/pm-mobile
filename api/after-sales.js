@@ -122,6 +122,11 @@ export function rejectComplaintAudit(data) {
   return request({ url: '/afterSales/feedback/complaintAudit/reject', method: 'PUT', data })
 }
 
+/** 意见反馈：后端转发到企业微信群机器人 webhook（webhook 地址在系统参数 afterSales.opinionWebhookUrl 中配置） */
+export function sendOpinionFeedback(data) {
+  return request({ url: '/system/opinion/send', method: 'POST', data })
+}
+
 export function getFeedbackDashboardSummary(data) {
   return request({ url: '/afterSales/feedback/statistics/dashboard', method: 'GET', params: data })
 }

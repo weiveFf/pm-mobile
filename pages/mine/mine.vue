@@ -29,12 +29,20 @@
 
       <!-- 常用功能 -->
       <view class="shead"><text class="st">常用功能</text></view>
-      <view class="mgrid one">
+      <view class="mgrid">
         <view class="mitem pressable" @click="goStats">
           <view class="sq s5">◔</view>
           <view class="mtxt">
             <text class="mt">数据看板</text>
             <text class="msub">看看最近做得怎么样</text>
+          </view>
+          <text class="ar">›</text>
+        </view>
+        <view class="mitem pressable" @click="goOpinion">
+          <view class="sq s1">✎&#xFE0E;</view>
+          <view class="mtxt">
+            <text class="mt">意见反馈</text>
+            <text class="msub">提建议，帮我们改进</text>
           </view>
           <text class="ar">›</text>
         </view>
@@ -106,6 +114,10 @@ function onAbout() {
 
 function goStats() {
   uni.showToast({ title: '功能正在维护中', icon: 'none' })
+}
+
+function goOpinion() {
+  uni.navigateTo({ url: '/pages/opinion/opinion' })
 }
 
 function goChangePwd() {
