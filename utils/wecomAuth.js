@@ -9,9 +9,22 @@
  * 依赖后端：
  *  - POST /wechat/code-login  已存在（code → weChatUserId → 系统用户 → JWT）
  *  - GET  /wechat/oauth-url   本次新增（CorpId 取自系统参数 wecom.corpId）
+ *
+ * ⚠️ 前置条件（企微侧，代码无法代替）：
+ *  H5 部署域名必须配置为该自建应用的「网页授权及JS-SDK → 可信域名」，
+ *  且不能是 IP / localhost、不能带协议头与路径、需与访问域名完全一致（带端口时端口也要登记）、
+ *  需通过 ICP 备案校验并在域名根目录放好 WW_verify_*.txt 校验文件。
+ *  否则企微会拦在授权页并提示「redirect_uri需使用应用可信域名」。
+ *  为免把用户卡在企微错误页上，本文件会在地址根本不可能通过校验时**直接跳过免登**，回落账号密码登录。
+ *
+ *  注意区分：PC 端扫码登录（wwlogin）配的是「企业微信授权登录 → Web网页 → 授权回调域」，
+ *  手机端 H5 网页授权（oauth2/authorize）校验的是上面这个「可信域名」—— 两个字段互相独立。
  */
 import { isLoggedIn, setToken, setUserId, setUserName, setAccount } from '@/utils/auth.js'
 import { weChatCodeLogin, getWecomOauthUrl } from '@/api/login.js'
+
+/** 本会话是否已发起过跳授权（防止反复跳转/死循环） */
+const OAUTH_TRIED_KEY = 'yessys_pm_wecom_oauth_tried'
 
 /** 是否在企业微信内置浏览器（企业微信 UA 含 wxwork） */
 export function isWeComBrowser() {
@@ -21,6 +34,75 @@ export function isWeComBrowser() {
   // #endif
   // #ifndef H5
   return false
+  // #endif
+}
+
+/** 应急开关：地址栏加 ?nologin=1 时强制走账号密码登录（企微后台没配好时用它进系统） */
+function skipAutoLoginByQuery() {
+  // #ifdef H5
+  return /[?&](?:nologin|pwd)=1/.test(String(window.location.search || ''))
+  // #endif
+  // #ifndef H5
+  return false
+  // #endif
+}
+
+/**
+ * 当前地址是否**根本不可能**作为 redirect_uri 通过企微校验。
+ * 企微只禁止「IP / 本机地址」这类形式：可信域名不支持 IP 地址与短链域名，且必须与访问域名完全一致。
+ * 注意：**与协议头无关**（官方示例中 http 同样可以通过），端口则需要在可信域名里一并登记 ——
+ * 这两种情况不拦截，只在控制台提示，避免误伤 http 部署的正式环境。
+ */
+function canUseOauthRedirect() {
+  // #ifdef H5
+  const loc = window.location
+  const host = String(loc.hostname || '')
+  if (!host || host === 'localhost' || host === '127.0.0.1') return false
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false // IPv4：企微不接受 IP 作为可信域名
+  if (host.indexOf(':') >= 0) return false // IPv6
+  if (String(loc.protocol || '') !== 'https:') {
+    console.warn('[wecom] 当前为 http：企微可信域名与协议头无关，可继续；请确认该域名已配为可信域名')
+  }
+  if (loc.port) {
+    console.warn('[wecom] 当前地址带端口 ' + loc.port + '：企微要求端口号也登记到可信域名中')
+  }
+  return true
+  // #endif
+  // #ifndef H5
+  return false
+  // #endif
+}
+
+function oauthTried() {
+  // #ifdef H5
+  try {
+    return window.sessionStorage.getItem(OAUTH_TRIED_KEY) === '1'
+  } catch (e) {
+    return false
+  }
+  // #endif
+  // #ifndef H5
+  return false
+  // #endif
+}
+
+function markOauthTried() {
+  // #ifdef H5
+  try {
+    window.sessionStorage.setItem(OAUTH_TRIED_KEY, '1')
+  } catch (e) {
+    /* 忽略 */
+  }
+  // #endif
+}
+
+function clearOauthTried() {
+  // #ifdef H5
+  try {
+    window.sessionStorage.removeItem(OAUTH_TRIED_KEY)
+  } catch (e) {
+    /* 忽略 */
+  }
   // #endif
 }
 
@@ -66,7 +148,7 @@ function saveLogin(data) {
 
 /**
  * 尝试企业微信自动登录。
- * @returns {Promise<boolean>} true = 已登录成功或正在跳转授权；false = 未处理
+ * @returns {Promise<boolean>} true = 已登录成功或正在跳转授权；false = 未处理（走账号密码登录）
  */
 export async function wecomAutoLogin() {
   if (isLoggedIn()) return true
@@ -77,6 +159,7 @@ export async function wecomAutoLogin() {
 
   // #ifdef H5
   if (!isWeComBrowser()) return false
+  if (skipAutoLoginByQuery()) return false
 
   const code = takeCodeFromUrl()
   if (code) {
@@ -88,6 +171,7 @@ export async function wecomAutoLogin() {
       }
       saveLogin(data)
       cleanOauthQuery()
+      clearOauthTried()
       return true
     } catch (e) {
       cleanOauthQuery()
@@ -99,11 +183,23 @@ export async function wecomAutoLogin() {
     }
   }
 
+  // 地址形式根本不可能通过企微校验（IP / localhost）→ 跳过去只会看到企微报错页
+  if (!canUseOauthRedirect()) {
+    console.warn(
+      '[wecom] 当前地址不满足企业微信可信域名要求，已跳过免密登录：' + String(window.location.origin || '')
+    )
+    return false
+  }
+
+  // 本会话已跳过一次授权仍没登录成功（多半是后台未配可信域名）→ 不再反复跳，回落账号密码登录
+  if (oauthTried()) return false
+
   // 在企微容器内但尚未授权：整页跳转静默授权，回跳后带 code
   try {
     const res = await getWecomOauthUrl({ redirect: currentRedirectUri() })
     const url = (res && res.data && (res.data.url || res.data)) || ''
     if (url) {
+      markOauthTried()
       window.location.replace(url)
       return true
     }
