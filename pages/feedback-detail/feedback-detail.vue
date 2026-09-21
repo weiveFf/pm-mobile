@@ -1,6 +1,13 @@
 <template>
   <view class="pm-page detail-page">
     <view v-if="fb" class="content">
+      <!-- 企微通知等外链直达时无页面栈，原生返回会退出应用，提供回首页入口 -->
+      <view v-if="isEntryPage" class="entry-nav">
+        <text class="entry-nav-link pressable" @click="goHome">工作台</text>
+        <text class="entry-nav-sep">|</text>
+        <text class="entry-nav-link pressable" @click="goFeedbackList">反馈列表</text>
+      </view>
+
       <!-- Hero：森林渐变卡 -->
       <view class="hero">
         <view class="deco" />
@@ -75,6 +82,18 @@
                   <view class="cm-quote-body" v-html="c.quoteHtml"></view>
                 </view>
                 <view v-if="c.html" class="cm-rich" v-html="c.html" @click="onRichClick($event, c.html)"></view>
+                <!-- 评论图片（PC 端粘贴的截图存 imageUrls 字段，与正文分开） -->
+                <view v-if="c.images.length" class="cm-imgs">
+                  <image
+                    v-for="(u, i) in c.images"
+                    :key="'cm-img-' + i"
+                    class="cm-img"
+                    :class="{ 'cm-img-single': c.images.length === 1 }"
+                    :mode="c.images.length === 1 ? 'aspectFit' : 'aspectFill'"
+                    :src="u"
+                    @click.stop="openPreview(u, c.images)"
+                  />
+                </view>
               </view>
             </view>
           </view>
@@ -114,20 +133,48 @@
             <text class="cm-quote-draft-clear" @click="clearQuote">✕</text>
           </view>
 
+          <!-- 待发图片（与 PC 端 Ctrl+V 粘贴截图等价） -->
+          <view v-if="pendingImages.length || uploadingImg" class="cm-pending">
+            <view v-for="(img, i) in pendingImages" :key="'pend-' + i" class="cm-pending-item">
+              <image class="cm-pending-img" :src="img.url" mode="aspectFill" @click="previewPendingImage(i)" />
+              <view class="cm-pending-del" @click.stop="removeCommentImage(i)"><text class="cm-pending-x">×</text></view>
+            </view>
+            <view v-if="uploadingImg" class="cm-pending-item cm-pending-wait">
+              <text class="cm-pending-tip">上传中</text>
+            </view>
+          </view>
+
           <view class="cm-composer">
+            <view class="cm-img-btn pressable" @click="pickCommentImage">
+              <svg
+                class="cm-img-ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+                <circle cx="8.6" cy="9.8" r="1.5" />
+                <path d="M4.2 17.6l4.4-4.1 3.1 2.9 3.3-3.3 4.8 4.5" />
+              </svg>
+            </view>
             <text class="cm-at-btn pressable" @click="openMention">@</text>
             <textarea
               class="cm-input"
               :value="commentText"
               :focus="commentFocus"
-              placeholder="写评论，点 @ 或输入 @ 提及同事…"
+              placeholder="写评论，@ 提及同事"
               :auto-height="false"
               confirm-type="send"
               @input="onCommentInput"
               @confirm="sendComment"
               @blur="commentFocus = false"
             />
-            <view class="cm-send pressable" @click="sendComment">{{ commenting ? '…' : '发送' }}</view>
+            <view class="cm-send pressable" :class="{ off: !canSendComment }" @click="sendComment">
+              {{ commenting ? '…' : '发送' }}
+            </view>
           </view>
         </view>
       </view>
@@ -173,19 +220,19 @@
       </view>
 
       <view class="dock">
-        <scroll-view scroll-x class="dock-scroll" :show-scrollbar="false">
+        <scroll-view scroll-x class="dock-scroll" :show-scrollbar="false" enable-flex>
           <view class="dock-inner">
-            <text v-if="canRespond" class="dock-btn main" @click="doRespond">响应</text>
-            <text v-if="canProcess" class="dock-btn main" @click="goProcess">处理</text>
-            <text v-if="canWithdraw" class="dock-btn danger" @click="doWithdraw">撤回反馈</text>
-            <text v-if="canReapply" class="dock-btn warn" @click="goReapply">再处理</text>
-            <text v-if="canClose" class="dock-btn success" @click="doClose">关闭反馈</text>
-            <text v-if="canDelayApply" class="dock-btn" @click="goDelay">申请延期</text>
-            <text v-if="canReviewDelay" class="dock-btn main" @click="goDelayReview('approve')">同意延期</text>
-            <text v-if="canReviewDelay" class="dock-btn danger" @click="goDelayReview('reject')">驳回延期</text>
-            <text v-if="canAssignRecipient" class="dock-btn" @click="goChangeRecipient">改处理人</text>
-            <text v-if="canReassignDept" class="dock-btn" @click="goReassign">改部门</text>
-            <text v-if="canComplaintAudit" class="dock-btn warn" @click="goComplaint">客诉审核</text>
+            <view v-if="canRespond" class="dock-btn main" @click="doRespond">响应</view>
+            <view v-if="canProcess" class="dock-btn main" @click="goProcess">处理</view>
+            <view v-if="canWithdraw" class="dock-btn danger" @click="doWithdraw">撤回</view>
+            <view v-if="canReapply" class="dock-btn warn" @click="goReapply">再处理</view>
+            <view v-if="canClose" class="dock-btn success" @click="doClose">关闭</view>
+            <view v-if="canDelayApply" class="dock-btn" @click="goDelay">申请延期</view>
+            <view v-if="canReviewDelay" class="dock-btn main" @click="goDelayReview('approve')">同意延期</view>
+            <view v-if="canReviewDelay" class="dock-btn danger" @click="goDelayReview('reject')">驳回延期</view>
+            <view v-if="canAssignRecipient" class="dock-btn" @click="goChangeRecipient">改处理人</view>
+            <view v-if="canReassignDept" class="dock-btn" @click="goReassign">改部门</view>
+            <view v-if="canComplaintAudit" class="dock-btn warn" @click="goComplaint">客诉审核</view>
           </view>
         </scroll-view>
       </view>
@@ -220,8 +267,12 @@ import { afterSalesExtFields, hasAfterSalesExtData, deserializeAfterSalesExt } f
 import { FEEDBACK_WORKFLOW_STATUS } from '@/constants/feedbackWorkflow.js'
 import { extractArray, normalizeDeptList, normalizeUserList } from '@/utils/apiResponse.js'
 import { fixRichTextImageUrls, extractImageSrcs, escapeHtml } from '@/utils/richText.js'
+import { uploadImage } from '@/api/common.js'
+import { resolveUploadUrl, extractUploadPath } from '@/utils/uploadUrl.js'
+import { goHome, goFeedbackList, isEntryPage as checkEntryPage } from '@/utils/nav.js'
 
 const id = ref('')
+const isEntryPage = ref(false)
 const loading = ref(false)
 const fb = ref(null)
 const processList = ref([])
@@ -231,6 +282,9 @@ const activeTab = ref('问题描述')
 const tabs = ['问题描述', '处理要求', '操作记录']
 const commentText = ref('')
 const commenting = ref(false)
+/** 待发评论图片：[{ url: 可访问地址(预览), path: /uploads/xxx(提交) }]，与 PC 端 imageUrls 对齐 */
+const pendingImages = ref([])
+const uploadingImg = ref(false)
 const statusLabel = ref('-')
 const statusTone = ref('')
 const statusKey = ref('')
@@ -303,6 +357,27 @@ function parseQuotedContent(text) {
   return { quoteName: m[1] || '', quoteBody: m[2] || '', body: m[3] || '' }
 }
 
+/** 评论图片：后端存 /uploads/xxx 或 ImageUrlsJson，转成当前环境绝对地址 */
+function commentImages(c) {
+  let raw = (c && (c.imageUrls || c.ImageUrls)) || []
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw)
+    } catch (e) {
+      raw = []
+    }
+  }
+  if ((!raw || !raw.length) && c && (c.imageUrlsJson || c.ImageUrlsJson)) {
+    try {
+      raw = JSON.parse(c.imageUrlsJson || c.ImageUrlsJson)
+    } catch (e) {
+      raw = []
+    }
+  }
+  if (!Array.isArray(raw)) return []
+  return raw.map((u) => resolveUploadUrl(u, baseURL)).filter(Boolean)
+}
+
 const commentViews = computed(() =>
   (comments.value || []).map((c) => {
     // PC 端评论人字段是 createNickName / create_by；此前误用 createByNickName 导致显示「用户」
@@ -316,6 +391,7 @@ const commentViews = computed(() =>
       avatarBg: avatarColor(name),
       time: c.create_time || c.createTime || '',
       mine: isMine(c),
+      images: commentImages(c),
       quoteName: parts.quoteName,
       quoteHtml: parts.quoteBody ? renderCommentContent(parts.quoteBody) : '',
       html: parts.quoteName ? renderCommentContent(parts.body) : renderCommentContent(c.content),
@@ -594,21 +670,29 @@ const previewVisible = ref(false)
 const previewUrls = ref([])
 const previewIndex = ref(0)
 
-function openPreview(src) {
+/**
+ * 打开图片查看器。
+ * @param {string} src 当前图
+ * @param {string[]} [urls] 指定浏览列表（如某条评论的多张图）；不传则回落到「页面内所有图片」
+ */
+function openPreview(src, urls) {
   const s = String(src || '')
   if (!s) return
-  let urls = [s]
-  // #ifdef H5
-  try {
-    const all = Array.prototype.slice
-      .call(document.querySelectorAll(PAGE_SEL + ' img'))
-      .map((i) => i.src)
-      .filter(Boolean)
-    if (all.length) urls = all
-  } catch (e) {}
-  // #endif
-  previewUrls.value = urls
-  previewIndex.value = Math.max(0, urls.indexOf(s))
+  const given = Array.isArray(urls) ? urls.filter(Boolean) : []
+  let list = given.length ? given : [s]
+  if (!given.length) {
+    // #ifdef H5
+    try {
+      const all = Array.prototype.slice
+        .call(document.querySelectorAll(PAGE_SEL + ' img, ' + PAGE_SEL + ' uni-image img'))
+        .map((i) => i.src)
+        .filter(Boolean)
+      if (all.length) list = all
+    } catch (e) {}
+    // #endif
+  }
+  previewUrls.value = list
+  previewIndex.value = Math.max(0, list.indexOf(s))
   previewVisible.value = true
 }
 function closePreview() {
@@ -637,6 +721,8 @@ function onPageClickCapture(e) {
   if (tag !== 'IMG') return
   // 查看器内部的点击由查看器自己处理（单击关闭），不要重复打开
   if (t.closest && t.closest('.pv')) return
+  // 评论图片 / 待发图片是 uni <image>，用 @click 精确指定浏览列表，这里不再重复处理
+  if (t.closest && (t.closest('.cm-imgs') || t.closest('.cm-pending'))) return
   openPreview(t.src || (t.getAttribute && t.getAttribute('src')))
 }
 
@@ -845,17 +931,82 @@ async function load() {
   }
 }
 
+/** 可发送：有文字、有引用、或已选图片（与后端「内容或图片至少一项」的校验一致） */
+const canSendComment = computed(
+  () => !!commentText.value.trim() || !!quoteTarget.value || pendingImages.value.length > 0
+)
+
+/** 选择并发评论图片（与 PC 端「Ctrl+V 粘贴截图」等价，移动端走相册/拍照） */
+function pickCommentImage() {
+  const max = 9
+  const remain = max - pendingImages.value.length
+  if (remain <= 0) {
+    uni.showToast({ title: `最多 ${max} 张图片`, icon: 'none' })
+    return
+  }
+  uni.chooseImage({
+    count: remain,
+    sizeType: ['compressed'],
+    success: (r) => uploadCommentImages(r.tempFilePaths || []),
+    fail: (err) => {
+      if (err && err.errMsg && !err.errMsg.includes('cancel')) {
+        uni.showToast({ title: '选择图片失败', icon: 'none' })
+      }
+    }
+  })
+}
+
+async function uploadCommentImages(paths) {
+  const list = (paths || []).filter(Boolean)
+  if (!list.length) return
+  uploadingImg.value = true
+  uni.showLoading({ title: '上传中…', mask: true })
+  let failed = 0
+  try {
+    for (const p of list) {
+      try {
+        const url = await uploadImage(p)
+        pendingImages.value.push({ url, path: extractUploadPath(url) })
+      } catch (e) {
+        failed += 1
+      }
+    }
+  } finally {
+    uni.hideLoading()
+    uploadingImg.value = false
+  }
+  if (failed) {
+    uni.showToast({ title: `${failed} 张图片上传失败`, icon: 'none' })
+  }
+}
+
+function removeCommentImage(i) {
+  pendingImages.value.splice(i, 1)
+}
+
+/** 预览待发图片（按已选列表浏览） */
+function previewPendingImage(i) {
+  const urls = pendingImages.value.map((x) => x.url)
+  openPreview(urls[i], urls)
+}
+
 async function sendComment() {
   const body = commentText.value.trim()
-  if (!body && !quoteTarget.value) return
+  if (!body && !quoteTarget.value && !pendingImages.value.length) return
+  if (commenting.value || uploadingImg.value) return
   commenting.value = true
   try {
     const content = quoteTarget.value
       ? `「引用 ${quoteTarget.value.name}」\n${quoteTarget.value.text}\n\n${body}`
       : body
-    await addFeedbackComment(id.value, { content, mentionUserIds: collectMentionIds(content) })
+    await addFeedbackComment(id.value, {
+      content,
+      imageUrls: pendingImages.value.map((x) => x.path),
+      mentionUserIds: collectMentionIds(content)
+    })
     commentText.value = ''
     quoteTarget.value = null
+    pendingImages.value = []
     mentionUserIds.value = []
     mentionOpen.value = false
     const cRes = await getFeedbackComments(id.value)
@@ -949,10 +1100,16 @@ function goComplaint() {
   uni.navigateTo({ url: '/pages/complaint-audit/complaint-audit?id=' + id.value })
 }
 
+function refreshEntryPage() {
+  isEntryPage.value = checkEntryPage()
+}
+
 onLoad((q) => {
-  id.value = q.id || ''
+  id.value = q.id || q.feedbackId || ''
+  refreshEntryPage()
 })
 onShow(() => {
+  refreshEntryPage()
   if (id.value) load()
 })
 
@@ -976,6 +1133,28 @@ onUnmounted(() => {
 
 .detail-page .content {
   padding: 32rpx 24rpx 180rpx;
+}
+
+.entry-nav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+  padding: 18rpx 24rpx;
+  border-radius: $pm-radius-lg;
+  background: $pm-surface;
+  box-shadow: $pm-shadow;
+}
+.entry-nav-link {
+  font-size: 28rpx;
+  font-weight: 650;
+  color: $pm-primary;
+}
+.entry-nav-sep {
+  font-size: 24rpx;
+  color: $pm-muted;
 }
 
 /* —— Hero：森林渐变 —— */
@@ -1402,10 +1581,107 @@ onUnmounted(() => {
   color: $pm-muted;
   font-size: 24rpx;
 }
+/* —— 评论里的图片（PC 端粘贴的截图存在 imageUrls 字段）—— */
+.cm-imgs {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 10rpx;
+}
+.cm-img {
+  width: 176rpx;
+  height: 176rpx;
+  border-radius: 14rpx;
+  background: rgba(20, 30, 24, 0.06);
+  /* 气泡过窄时不允许压缩，否则比例失真（放不下就换行） */
+  flex-shrink: 0;
+}
+/* 只有一张时给大图（截图类内容要看得清），点击进查看器看全屏。
+   ⚠️ 宽度必须用固定值，不能写 100%：`.cm-item.me .cm-body` 是 align-items:flex-end，
+   自己发的评论其 `.cm-bubble` 会「按内容定宽」，此时 100% = 文字那一丁点宽度，
+   图片会被压成竖条（配合固定高度 + aspectFit 就完全变形）。给固定宽度后，
+   内容反过来把气泡撑宽，这才是聊天气泡里图片该有的行为。 */
+.cm-img-single {
+  width: 420rpx;
+  height: 240rpx;
+  border-radius: 16rpx;
+}
+.cm-item.me .cm-img {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* —— 待发图片 —— */
+.cm-pending {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding: 16rpx 24rpx 0;
+}
+.cm-pending-item {
+  position: relative;
+  width: 124rpx;
+  height: 124rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: $pm-bg-2;
+}
+.cm-pending-img {
+  width: 100%;
+  height: 100%;
+}
+.cm-pending-del {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 38rpx;
+  height: 38rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 30, 24, 0.55);
+  border-radius: 0 0 0 14rpx;
+}
+.cm-pending-x {
+  color: #fff;
+  font-size: 26rpx;
+  line-height: 1;
+}
+.cm-pending-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx dashed $pm-line;
+  background: $pm-bg;
+}
+.cm-pending-tip {
+  font-size: 20rpx;
+  color: $pm-muted;
+}
+
+/* 评论框左侧的「图片」按钮 */
+.cm-img-btn {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: $pm-bg-2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+.cm-img-ic {
+  width: 34rpx;
+  height: 34rpx;
+  color: $pm-primary;
+}
+
 .cm-at-btn {
-  width: 64rpx;
-  height: 64rpx;
-  line-height: 64rpx;
+  width: 72rpx;
+  height: 72rpx;
+  line-height: 72rpx;
   text-align: center;
   border-radius: 50%;
   background: $pm-bg-2;
@@ -1419,32 +1695,41 @@ onUnmounted(() => {
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 16rpx 24rpx calc(16rpx + constant(safe-area-inset-bottom));
-  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+  padding: 16rpx 20rpx calc(16rpx + constant(safe-area-inset-bottom));
+  padding: 16rpx 20rpx calc(16rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 .cm-input {
   flex: 1;
-  height: 76rpx;
-  /* H5：uni 的 textarea 内层（.uni-textarea-textarea / .uni-textarea-placeholder）
-     是绝对定位、从顶部开始排版的，且 line-height:inherit。
-     把行高撑成胶囊高度，单行文字与占位文字才会垂直居中（原来只有 font-size，看着偏上）。 */
-  line-height: 76rpx;
-  padding: 0 28rpx;
+  min-width: 0;
+  width: 0;
+  height: 72rpx;
+  line-height: 72rpx;
+  padding: 0 24rpx;
   background: $pm-bg-2;
   border-radius: 999rpx;
-  font-size: 26rpx;
+  font-size: 24rpx;
+  box-sizing: border-box;
 }
 .cm-send {
-  margin-left: 16rpx;
-  padding: 0 32rpx;
-  height: 76rpx;
-  line-height: 76rpx;
+  margin-left: 12rpx;
+  padding: 0 24rpx;
+  min-width: 96rpx;
+  height: 72rpx;
+  line-height: 72rpx;
   border-radius: 999rpx;
   background: $pm-primary;
   color: #fff;
-  font-size: 26rpx;
+  font-size: 24rpx;
   font-weight: 750;
   flex-shrink: 0;
+  text-align: center;
+  box-sizing: border-box;
+}
+/* 无内容可发时用米灰禁用态（避免半透明绿看起来像「坏了」） */
+.cm-send.off {
+  background: $pm-bg-2;
+  color: $pm-muted;
 }
 .nil {
   padding: 36rpx 0;
@@ -1541,21 +1826,35 @@ onUnmounted(() => {
 }
 .dock-scroll {
   width: 100%;
-  white-space: nowrap;
 }
 .dock-inner {
-  display: inline-flex;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
   padding: 0 24rpx;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 .dock-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
   margin-right: 12rpx;
-  padding: 18rpx 30rpx;
+  padding: 0 28rpx;
+  min-width: 96rpx;
+  height: 72rpx;
+  line-height: 1;
   border-radius: 999rpx;
   background: $pm-surface;
   color: $pm-text;
   font-size: 24rpx;
   font-weight: 700;
   box-shadow: $pm-shadow;
+  box-sizing: border-box;
 }
 .dock-btn.main {
   background: $pm-primary;
