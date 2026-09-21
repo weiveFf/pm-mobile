@@ -184,7 +184,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { listDept, listUser } from '@/api/system.js'
 import { addProductFeedbackList } from '@/api/after-sales.js'
@@ -205,6 +205,74 @@ import ImageUploader from '@/components/image-uploader/image-uploader.vue'
 const steps = ['基础信息', '问题描述', '处理要求']
 const step = ref(1)
 const submitting = ref(false)
+
+/* —— H5：把「浏览器返回 / 企微侧滑手势 / 安卓返回键」映射成「退回上一步」 ——
+ * H5 下返回就是浏览器的历史栈行为，uni 的 onBackPress 在 H5 不生效，
+ * 因此用「压入同 URL 的历史守卫 + 监听 popstate」实现：
+ *   进入第 N 步时多压一条历史记录 → 返回时先弹掉守卫（等于退回上一步），
+ *   只有在第 1 步时才不拦截，正常退出页面。
+ */
+let guardCount = 0 // 我们额外压入的历史条数
+let leavingPage = false // 提交成功/主动离开时为 true，放行所有返回
+
+function pushStepGuard() {
+  // #ifdef H5
+  try {
+    window.history.pushState({ addFeedbackStep: step.value }, '', window.location.href)
+    guardCount++
+  } catch (e) {
+    /* 忽略 */
+  }
+  // #endif
+}
+
+function onStepPopState() {
+  // #ifdef H5
+  if (leavingPage) return
+  if (step.value > 1) {
+    step.value -= 1
+    pushStepGuard() // 重新守住，保证还能继续一步步退
+  } else {
+    guardCount = Math.max(0, guardCount - 1) // 已在第 1 步：放行，真的退出页面
+  }
+  // #endif
+}
+
+/** 主动离开页面：连同历史守卫一起退回上一页，避免「返回只弹掉守卫、人还在页面上」 */
+function leavePageSafely() {
+  leavingPage = true
+  // #ifdef H5
+  const back = guardCount + 1
+  guardCount = 0
+  try {
+    window.history.go(-back)
+  } catch (e) {
+    uni.navigateBack()
+  }
+  // 兜底：万一没有可回退的历史（本页就是第一个页面），跳到反馈列表
+  setTimeout(() => {
+    const pages = getCurrentPages()
+    const route = pages.length ? pages[pages.length - 1].route || '' : ''
+    if (route.indexOf('add-feedback') >= 0) uni.reLaunch({ url: '/pages/feedback/feedback' })
+  }, 600)
+  return
+  // #endif
+  // #ifndef H5
+  uni.navigateBack()
+  // #endif
+}
+
+onMounted(() => {
+  // #ifdef H5
+  window.addEventListener('popstate', onStepPopState)
+  // #endif
+})
+
+onUnmounted(() => {
+  // #ifdef H5
+  window.removeEventListener('popstate', onStepPopState)
+  // #endif
+})
 
 const form = reactive({
   fid: undefined,
@@ -443,11 +511,39 @@ function nextStep() {
     const err = validateDescription()
     if (err) return uni.showToast({ title: err, icon: 'none' })
   }
-  if (step.value < 3) step.value++
+  if (step.value < 3) {
+    step.value++
+    pushStepGuard() // 进入下一步就压一条历史守卫，返回键/侧滑才「退一步」而不是退出页面
+  }
 }
 
 function prevStep() {
-  if (step.value > 1) step.value--
+  if (step.value <= 1) return
+  // #ifdef H5
+  // 「上一步」走浏览器返回，让历史栈与步骤同步（否则历史里会堆积守卫，要多按一次返回才退得掉）
+  let handled = false
+  const mark = () => {
+    handled = true
+  }
+  window.addEventListener('popstate', mark, { once: true })
+  try {
+    window.history.back()
+  } catch (e) {
+    /* 忽略 */
+  }
+  setTimeout(() => {
+    window.removeEventListener('popstate', mark)
+    if (!handled && step.value > 1) {
+      // 极端情况下没触发 popstate，手动兜底退一步
+      step.value--
+      guardCount = Math.max(0, guardCount - 1)
+    }
+  }, 260)
+  return
+  // #endif
+  // #ifndef H5
+  step.value--
+  // #endif
 }
 
 const confirmMessage = computed(() => {
@@ -503,7 +599,7 @@ async function doSubmit() {
     }
     await addProductFeedbackList(payload)
     uni.showToast({ title: '添加成功', icon: 'success' })
-    setTimeout(() => uni.navigateBack(), 500)
+    setTimeout(() => leavePageSafely(), 500)
   } catch (e) {
     uni.showToast({ title: (e && e.message) || '提交失败', icon: 'none' })
   } finally {
