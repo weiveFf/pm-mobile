@@ -27,9 +27,9 @@
         </view>
       </view>
 
-      <!-- 常用功能 -->
+      <!-- 常用功能（单列一行一个，与「账号与安全」保持同一套行样式） -->
       <view class="shead"><text class="st">常用功能</text></view>
-      <view class="mgrid">
+      <view class="mgrid one">
         <view class="mitem pressable" @click="goStats">
           <view class="sq s5">◔</view>
           <view class="mtxt">
@@ -351,13 +351,13 @@ onShow(() => {
   color: $pm-text;
 }
 .msub {
+  /* 单列整行后描述有充足宽度，正常换行即可完整显示；
+     原来写死 white-space:nowrap + 省略号，双列时会被截断（「看看最近做得怎…」）。 */
   display: block;
   margin-top: 4rpx;
   font-size: 20rpx;
+  line-height: 1.35;
   color: $pm-muted;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .ar {
   color: #C6C0B2;

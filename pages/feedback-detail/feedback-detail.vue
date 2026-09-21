@@ -1128,18 +1128,9 @@ onUnmounted(() => {
   white-space: normal;
 }
 
-/* 富文本内的图片样式——注意：v-html 注入的节点不带 scoped 属性，
-   此处写 scoped 选择器是不生效的，统一维护在文件末尾的全局 style 块里，
-   别改这里（历史上的坑就在这）。 */
-.cm-rich p,
-.log-remark-body p {
-  margin: 0 0 8rpx;
-  line-height: 1.6;
-}
-.cm-rich p:last-child,
-.log-remark-body p:last-child {
-  margin-bottom: 0;
-}
+/* 注：富文本（v-html）里 <p> / <img> / @高亮 的样式在 styles/richtext.scss。
+   写在这里一律无效 —— v-html 节点没有 data-v 属性，而本页每个 style 块
+   都会被构建成 scoped（含下面那个不带 scoped 的块），详见 richtext.scss 文件头。 */
 
 /* —— 悬浮评论入口（FAB） —— */
 .fab {
@@ -1588,72 +1579,11 @@ onUnmounted(() => {
 <style lang="scss">
 @import '@/uni.scss';
 
-/* v-html 渲染的富文本容器：强制占满父级宽度、不允许被内容撑开。
-   PC 端 wangEditor 插入的图片带内联 width:900px，若某层容器是「按内容定宽」，
-   容器会被撑到 900px，此时子元素的 max-width:100% 也跟着变成 900px（百分比失效），
-   表现就是图片只显示左半边。width:100% 用来打断这个循环。 */
-.rich-body,
-.cm-rich,
-.cm-quote-body,
-.log-remark-body {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow-wrap: anywhere;
-}
-
-/* 兜底：容器内任何后代都不允许超出容器宽度。
-   富文本里可能还有带固定宽度的包装元素（不只是 img 自己），
-   这里统一压住，避免个别节点把整体撑出屏幕。 */
-.rich-body *,
-.cm-rich *,
-.cm-quote-body *,
-.log-remark-body * {
-  max-width: 100% !important;
-}
-
-/* v-html 渲染的富文本图片全局样式：确保不撑出屏幕、等比完整显示
-   （v-html 内容不带 scoped 属性，必须放全局）
-   三道保险：
-     1) HTML 侧由 utils/richText.js 的 normalizeRichImageSizing 剥掉尺寸声明；
-     2) 这里用 !important 覆盖任何残留的内联样式；
-     3) max-width 用 min(100%, 86vw) 兜底 —— 86vw ≈ 屏幕宽减去卡片左右内边距
-        （内容区 24rpx×2 + 卡片 28rpx×2 = 104rpx ≈ 14vw），
-        这样即使上层容器宽度异常，图片也不会超出屏幕。 */
-.rich-body img,
-.cm-rich img,
-.cm-quote-body img,
-.log-remark-body img {
-  display: block !important;
-  width: auto !important;
-  max-width: 100% !important; /* 老内核不支持 min() 时的兜底 */
-  max-width: min(100%, 86vw) !important;
-  height: auto !important;
-  max-height: none !important;
-  margin: 12rpx 0;
-  border-radius: 12rpx;
-}
-.cm-rich p,
-.log-remark-body p {
-  margin: 0 0 8rpx;
-  line-height: 1.6;
-}
-.cm-rich p:last-child,
-.log-remark-body p:last-child {
-  margin-bottom: 0;
-}
-/* 评论里的 @昵称 高亮 */
-.cm-rich .cm-at {
-  color: $pm-primary-deep;
-  font-weight: 700;
-}
-.cm-item.me .cm-rich,
-.cm-item.me .cm-rich p {
-  color: $pm-text;
-}
-.cm-item.me .cm-rich .cm-at {
-  color: $pm-primary-deep;
-}
+/* 注：富文本（v-html）相关样式已移到 styles/richtext.scss（由 App.vue 全局引入）。
+   原因：本项目的 H5 构建会把**页面组件里的每个 style 块**都编译成 scoped ——
+   即便这里写的是不带 scoped 属性的 style 块，产物里选择器也带 [data-v-*]，
+   对 v-html 注入的节点完全不生效（图片自适应、@高亮 等都受此影响）。
+   所以 v-html 内容的样式只能写在 App.vue 引入的全局样式表里，别再写回这里。 */
 
 /* —— 图片查看器（微信风格：黑底 / 单击关闭 / 左右切换 / 页码） —— */
 .pv {
@@ -1732,23 +1662,10 @@ onUnmounted(() => {
   color: $pm-text-secondary;
   word-break: break-word;
 }
-.cm-quote-body .cm-at {
-  color: $pm-primary-deep;
-  font-weight: 700;
-}
 .cm-item.me .cm-quote-body {
   color: $pm-text-secondary;
 }
-.cm-item.me .cm-quote-body .cm-at {
-  color: $pm-primary-deep;
-}
-.cm-quote-body img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 8rpx 0;
-  border-radius: 8rpx;
-}
+/* 注：.cm-quote-body .cm-at 与 .cm-quote-body img（v-html 内容）在 styles/richtext.scss */
 .cm-quote-btn {
   margin-left: 8rpx;
   font-size: 20rpx;

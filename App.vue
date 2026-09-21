@@ -40,6 +40,8 @@ export default {
 
 <style lang="scss">
 @import '@/styles/theme.scss';
+/* 富文本（v-html）渲染样式：必须全局——页面内 style 会被构建成 scoped，对 v-html 无效 */
+@import '@/styles/richtext.scss';
 
 page {
   background-color: $pm-bg;

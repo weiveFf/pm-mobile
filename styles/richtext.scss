@@ -1,0 +1,87 @@
+/**
+ * 富文本（v-html）渲染样式 —— 必须放在**真正的全局样式表**里。
+ *
+ * 为什么不能写在页面组件的 <style> 里（踩过的坑，别改回去）：
+ *  1) v-html 注入的节点不带 data-v-* 属性，scoped 选择器命不中；
+ *  2) 本项目 H5 构建会把**页面组件里的每一个 style 块**都加上 scoped —— 包括
+ *     没写 scoped 的那个 `<style lang="scss">`。实测 feedback-detail.vue 的第二个
+ *     style 块编译后选择器全部带 [data-v-xxxx]，对 v-html 内容完全无效
+ *     （曾导致「图片只显示左半边」的问题一直修不掉）。
+ *  只有 App.vue 引入的全局样式才是真正全局的（构建产物 index-*.css 里选择器不带 data-v）。
+ */
+@import '@/uni.scss';
+
+/* ---- 容器：占满父级宽度，且不被内容撑开 ----
+   PC 端 wangEditor 插入的图片带内联 style="width:900px"，若某层容器是「按内容定宽」，
+   容器会被撑到 900px，其子元素的 max-width:100% 也跟着变成 900px（百分比失效），
+   表现就是图片只显示左半边。width:100% 用来打断这个循环。 */
+.rich-body,
+.cm-rich,
+.cm-quote-body,
+.log-remark-body {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+/* ---- 兜底：容器内任何后代都不得超出容器宽度 ----
+   富文本里除 <img> 之外，可能还有被 PC 端带了固定宽度的包装元素。 */
+.rich-body *,
+.cm-rich *,
+.cm-quote-body *,
+.log-remark-body * {
+  max-width: 100% !important;
+}
+
+/* ---- 图片：不撑出屏幕、等比完整显示 ----
+   三道保险：
+     1) 渲染前由 utils/richText.js 的 normalizeRichImageSizing 剥掉尺寸声明；
+     2) 这里用 !important 覆盖任何残留的内联样式；
+     3) max-width 用 min(100%, 86vw) 兜底 —— 86vw ≈ 屏宽减去卡片左右内边距
+        （内容区 24rpx×2 + 卡片 28rpx×2 = 104rpx ≈ 14vw），
+        即使上层容器宽度异常，图片也不会超出屏幕。 */
+.rich-body img,
+.cm-rich img,
+.cm-quote-body img,
+.log-remark-body img {
+  display: block !important;
+  width: auto !important;
+  max-width: 100% !important; /* 老内核不支持 min() 时的兜底 */
+  max-width: min(100%, 86vw) !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 12rpx 0;
+  border-radius: 12rpx;
+}
+
+/* ---- 富文本段落 ---- */
+.cm-rich p,
+.log-remark-body p {
+  margin: 0 0 8rpx;
+  line-height: 1.6;
+}
+.cm-rich p:last-child,
+.log-remark-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- @提及 高亮（v-html 里生成的 .cm-at 节点，必须全局） ---- */
+.cm-rich .cm-at {
+  color: $pm-primary-deep;
+  font-weight: 700;
+}
+.cm-item.me .cm-rich,
+.cm-item.me .cm-rich p {
+  color: $pm-text;
+}
+.cm-item.me .cm-rich .cm-at {
+  color: $pm-primary-deep;
+}
+.cm-quote-body .cm-at {
+  color: $pm-primary-deep;
+  font-weight: 700;
+}
+.cm-item.me .cm-quote-body .cm-at {
+  color: $pm-primary-deep;
+}

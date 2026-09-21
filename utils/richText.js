@@ -125,22 +125,43 @@ export function resolveRichImageUrl(src, baseURL) {
  *   style="width: 900px; max-width: 100%; max-height: 500px; height: auto; object-fit: contain;"
  * 其中 `width: 900px` / `max-height: 500px` 在手机窄屏上会让图片撑出容器或被压扁
  * （表现为「图片显示不全」），且内联样式优先级高于移动端的类选择器，仅靠 CSS 很难覆盖干净。
- * 因此这里把尺寸相关的内联样式与 width/height 属性统一剥掉，尺寸完全交给移动端 CSS 控制。
+ *
+ * 做法：
+ *  1) 剥掉尺寸相关的内联声明与 width/height 属性（其余如 border 保留）；
+ *  2) **额外写入一段"护栏"内联样式**（IMG_SIZE_GUARD）——因为样式表有可能根本没生效
+ *     （本项目的 H5 构建会把页面组件里的每个 style 块都编译成 scoped，对 v-html 节点无效），
+ *     内联写死 `max-width:min(100%,86vw)` 后，即使一条 CSS 都不命中，图片也不会超出屏幕。
+ *     86vw ≈ 屏宽 − 卡片左右内边距（内容区 24rpx×2 + 卡片 28rpx×2 ≈ 14vw）。
  */
+const IMG_SIZE_GUARD = 'display:block;max-width:100%;max-width:min(100%,86vw);height:auto;max-height:none'
+
+/** 去掉 style 字符串里与尺寸相关的声明，其余保留 */
+function stripSizingDecls(css) {
+  return String(css)
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter(
+      (s) => !/^(width|max-width|min-width|height|max-height|min-height|object-fit|display)\s*:/i.test(s)
+    )
+    .join('; ')
+}
+
 export function normalizeRichImageSizing(html) {
   if (!html) return ''
   return String(html).replace(/<img\b[^>]*>/gi, (tag) => {
     // 1) 去掉 width/height 属性（如 <img width="900" height="600">）
     let out = tag.replace(/\s(?:width|height)\s*=\s*(["'])[^"']*\1/gi, '')
-    // 2) 去掉 style 里与尺寸相关的声明，其余（如 border、margin）保留
-    out = out.replace(/\sstyle\s*=\s*(["'])([\s\S]*?)\1/i, (m, quote, css) => {
-      const kept = String(css)
-        .split(';')
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .filter((s) => !/^(width|max-width|min-width|height|max-height|min-height|object-fit|display)\s*:/i.test(s))
-      return kept.length ? ` style="${kept.join('; ')}"` : ''
-    })
+    // 2) 清洗已有 style，并追加护栏样式
+    const styleRe = /\sstyle\s*=\s*(["'])([\s\S]*?)\1/i
+    if (styleRe.test(out)) {
+      out = out.replace(styleRe, (m, quote, css) => {
+        const kept = stripSizingDecls(css)
+        return ` style="${kept ? kept + ';' : ''}${IMG_SIZE_GUARD}"`
+      })
+    } else {
+      out = out.replace(/<img\b/i, `<img style="${IMG_SIZE_GUARD}"`)
+    }
     return out
   })
 }
