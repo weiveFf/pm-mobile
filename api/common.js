@@ -1,4 +1,5 @@
 import { getToken, getUserId, getBaseURL } from '@/utils/auth.js'
+import { resolveUploadUrl } from '@/utils/uploadUrl.js'
 
 /**
  * 上传图片/文件（与 PC 端 wangEditor 同一接口）
@@ -40,7 +41,8 @@ export function uploadFile(filePath, fileName) {
  */
 export async function uploadImage(filePath) {
   const data = await uploadFile(filePath)
-  if (data.url) return data.url
-  if (data.fileName) return getBaseURL() + '/uploads/' + data.fileName
+  // 与 PC 端一致：优先 fileName 拼接，避免后端 AccessUrl 带错 Host 导致生产环境图片空白
+  if (data.fileName) return resolveUploadUrl(data.fileName)
+  if (data.url) return resolveUploadUrl(data.url)
   throw new Error('上传未返回图片地址')
 }
