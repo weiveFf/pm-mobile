@@ -549,6 +549,11 @@ async function fetchList(reset) {
   }
 }
 
+/** 「加载更多」按钮：按当前 pageNum 追加下一页（reset=false，不清空已有列表） */
+function loadMore() {
+  fetchList(false)
+}
+
 function switchMode(v) {
   if (mode.value === v) return
   mode.value = v
