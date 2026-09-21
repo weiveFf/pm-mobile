@@ -1,14 +1,20 @@
 /**
- * 企业微信自建应用 H5 —— 免密自动登录
+ * 企业微信自建应用 H5 —— 免密登录
  *
- * 流程（仅 H5 生效）：
+ * 两条入口：
+ *  - 自动：wecomAutoLogin()  —— 在企微里打开页面时静默走一次（App.vue 的 onShow 调用）
+ *  - 手动：wecomLogin()      —— 登录页「企业微信登录」按钮，用户点了就强制走一次
+ *    （自动那条有「本会话已尝试过就跳过」的防重跳保护，偶发失败时不会再试，
+ *      所以必须保留手动入口，用户一点即可重试）
+ *
+ * 流程：
  *  1) 地址栏带 code（企微 OAuth 回跳）→ 调 /wechat/code-login 换 token → 存本地 → 清理 URL 上的 code
  *  2) 无 code 且在企微容器（UA 含 wxwork）→ 调 /wechat/oauth-url 取授权链接 → 整页跳转授权
  *  3) 普通浏览器 / 已登录 → 不处理（保持账号密码登录）
  *
  * 依赖后端：
  *  - POST /wechat/code-login  已存在（code → weChatUserId → 系统用户 → JWT）
- *  - GET  /wechat/oauth-url   本次新增（CorpId 取自系统参数 wecom.corpId）
+ *  - GET  /wechat/oauth-url   已存在（CorpId 取系统参数 wecom.corpId）
  *
  * ⚠️ 前置条件（企微侧，代码无法代替）：
  *  H5 部署域名必须配置为该自建应用的「网页授权及JS-SDK → 可信域名」，
@@ -23,8 +29,9 @@
 import { isLoggedIn, setToken, setUserId, setUserName, setAccount } from '@/utils/auth.js'
 import { weChatCodeLogin, getWecomOauthUrl } from '@/api/login.js'
 
-/** 本会话是否已发起过跳授权（防止反复跳转/死循环） */
+/** 上次跳授权的时间戳；60s 内不重复跳（防企微报错后死循环），超过则允许再试一次（自愈偶发失败） */
 const OAUTH_TRIED_KEY = 'yessys_pm_wecom_oauth_tried'
+const OAUTH_TRIED_TTL = 60000
 
 /** 是否在企业微信内置浏览器（企业微信 UA 含 wxwork） */
 export function isWeComBrowser() {
@@ -73,10 +80,22 @@ function canUseOauthRedirect() {
   // #endif
 }
 
+/**
+ * 最近一次跳授权是否还在「冷却期」内。
+ * 用时间戳而不是布尔值：早先写死的 `'1'` 会在整个 WebView 会话里一直拦着，
+ * 一旦有一次偶发失败（网络抖动、后台未配好），之后每次打开都静默不自动登录 ——
+ * 用户反馈的「有几率不自动进首页」就是这个原因。改为 60s 冷却后，超时即可自动重试。
+ */
 function oauthTried() {
   // #ifdef H5
   try {
-    return window.sessionStorage.getItem(OAUTH_TRIED_KEY) === '1'
+    const raw = window.sessionStorage.getItem(OAUTH_TRIED_KEY)
+    if (!raw) return false
+    const t = Number(raw)
+    if (!Number.isFinite(t) || t <= 0) return raw === '1' // 兼容旧值
+    const fresh = Date.now() - t < OAUTH_TRIED_TTL
+    if (!fresh) clearOauthTried() // 已冷却完，清掉让本次可以重试
+    return fresh
   } catch (e) {
     return false
   }
@@ -89,7 +108,7 @@ function oauthTried() {
 function markOauthTried() {
   // #ifdef H5
   try {
-    window.sessionStorage.setItem(OAUTH_TRIED_KEY, '1')
+    window.sessionStorage.setItem(OAUTH_TRIED_KEY, String(Date.now()))
   } catch (e) {
     /* 忽略 */
   }
@@ -146,8 +165,51 @@ function saveLogin(data) {
   setAccount(data.userName || '')
 }
 
+/** 用 code 换 token（自动/手动登录共用） */
+async function exchangeCode(code) {
+  try {
+    const res = await weChatCodeLogin({ code })
+    const data = (res && res.data) || {}
+    if (!data.token) {
+      throw new Error((res && res.msg) || '企业微信登录失败')
+    }
+    saveLogin(data)
+    cleanOauthQuery()
+    clearOauthTried()
+    return true
+  } catch (e) {
+    cleanOauthQuery()
+    // 常见：企业微信账号未绑定系统用户（sys_user.WeChatUserId 为空）
+    setTimeout(() => {
+      uni.showToast({ title: (e && e.message) || '企业微信登录失败', icon: 'none', duration: 3000 })
+    }, 300)
+    return false
+  }
+}
+
+/** 取授权链接并整页跳转（自动/手动共用）；网络抖动时重试一次 */
+async function gotoOauth() {
+  let failed = false
+  for (let i = 0; i < 2; i++) {
+    try {
+      const res = await getWecomOauthUrl({ redirect: currentRedirectUri() })
+      const url = (res && res.data && (res.data.url || res.data)) || ''
+      if (url) {
+        markOauthTried()
+        window.location.replace(url)
+        return true
+      }
+      failed = true
+    } catch (e) {
+      failed = true
+    }
+  }
+  if (failed) console.warn('[wecom] 取授权链接失败，已回落账号密码登录')
+  return false
+}
+
 /**
- * 尝试企业微信自动登录。
+ * 自动尝试企业微信免密登录（App.vue 的 onShow 调用）。
  * @returns {Promise<boolean>} true = 已登录成功或正在跳转授权；false = 未处理（走账号密码登录）
  */
 export async function wecomAutoLogin() {
@@ -162,26 +224,7 @@ export async function wecomAutoLogin() {
   if (skipAutoLoginByQuery()) return false
 
   const code = takeCodeFromUrl()
-  if (code) {
-    try {
-      const res = await weChatCodeLogin({ code })
-      const data = (res && res.data) || {}
-      if (!data.token) {
-        throw new Error((res && res.msg) || '企业微信登录失败')
-      }
-      saveLogin(data)
-      cleanOauthQuery()
-      clearOauthTried()
-      return true
-    } catch (e) {
-      cleanOauthQuery()
-      // 常见：企业微信账号未绑定系统用户 → 提示后回落到账号密码登录
-      setTimeout(() => {
-        uni.showToast({ title: (e && e.message) || '企业微信登录失败', icon: 'none', duration: 3000 })
-      }, 300)
-      return false
-    }
-  }
+  if (code) return await exchangeCode(code)
 
   // 地址形式根本不可能通过企微校验（IP / localhost）→ 跳过去只会看到企微报错页
   if (!canUseOauthRedirect()) {
@@ -192,20 +235,48 @@ export async function wecomAutoLogin() {
   }
 
   // 本会话已跳过一次授权仍没登录成功（多半是后台未配可信域名）→ 不再反复跳，回落账号密码登录
+  // 想重试请走登录页的「企业微信登录」按钮（wecomLogin）
   if (oauthTried()) return false
 
-  // 在企微容器内但尚未授权：整页跳转静默授权，回跳后带 code
-  try {
-    const res = await getWecomOauthUrl({ redirect: currentRedirectUri() })
-    const url = (res && res.data && (res.data.url || res.data)) || ''
-    if (url) {
-      markOauthTried()
-      window.location.replace(url)
-      return true
-    }
-  } catch (e) {
-    /* 未配置 corpId 等：静默回落账号密码登录 */
-  }
+  return await gotoOauth()
+  // #endif
+}
+
+/**
+ * 手动「企业微信登录」——登录页按钮触发。
+ * 与自动登录的区别：忽略「本会话已尝试过」的防重跳标记（手动点击一定是用户主动重试），
+ * 非企微环境给出明确提示而不是静默失败。
+ */
+export async function wecomLogin() {
+  // #ifndef H5
+  uni.showToast({ title: '请在企业微信中打开本页面', icon: 'none' })
   return false
+  // #endif
+
+  // #ifdef H5
+  if (isLoggedIn()) return true
+
+  if (!isWeComBrowser()) {
+    uni.showToast({ title: '请在企业微信中打开本页面', icon: 'none', duration: 2600 })
+    return false
+  }
+  if (!canUseOauthRedirect()) {
+    uni.showToast({ title: '当前地址不满足企业微信授权要求', icon: 'none', duration: 2600 })
+    return false
+  }
+
+  // 回跳带 code：直接换 token
+  const code = takeCodeFromUrl()
+  if (code) return await exchangeCode(code)
+
+  // 手动重试前清掉防重跳标记，保证这次一定发起请求
+  clearOauthTried()
+  uni.showLoading({ title: '正在跳转企业微信…', mask: true })
+  const ok = await gotoOauth()
+  if (!ok) {
+    uni.hideLoading()
+    uni.showToast({ title: '企业微信登录失败，请稍后重试', icon: 'none', duration: 2600 })
+  }
+  return ok
   // #endif
 }

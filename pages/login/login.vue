@@ -49,6 +49,17 @@
         <button class="login-btn" :loading="loading" :disabled="loading" @click="onLogin">
           登 录
         </button>
+
+        <!-- 企业微信登录：自动免登偶发失败（如网络抖动、本次会话已跳过）时的兜底入口 -->
+        <button class="wx-btn" :disabled="wxLoading" @click="onWecomLogin">
+          <svg class="wx-ico" viewBox="0 0 24 24">
+            <path
+              d="M12 3.2c-5.1 0-9.2 3.5-9.2 7.8 0 2.4 1.3 4.6 3.3 6.1L5.4 21l3.9-1.9c.8.2 1.7.3 2.7.3 5.1 0 9.2-3.5 9.2-7.8S17.1 3.2 12 3.2z"
+              fill="currentColor"
+            />
+          </svg>
+          <text class="wx-txt">{{ wxLoading ? '正在跳转…' : '企业微信登录' }}</text>
+        </button>
       </view>
 
       <view class="bottom">
@@ -90,6 +101,7 @@ import {
   clearSavedLogin
 } from '@/utils/auth.js'
 import { doLogin } from '@/utils/loginService.js'
+import { wecomLogin } from '@/utils/wecomAuth.js'
 
 const windowHeight = ref(667)
 const statusBarHeight = ref(20)
@@ -99,7 +111,17 @@ const username = ref('')
 const password = ref('')
 const remember = ref(false)
 const loading = ref(false)
+const wxLoading = ref(false)
 const focusField = ref('')
+
+/** 企业微信登录：非企微环境/地址不合规时由 wecomLogin 内部给出提示 */
+async function onWecomLogin() {
+  if (wxLoading.value) return
+  wxLoading.value = true
+  const ok = await wecomLogin()
+  // 跳转成功时页面会直接离开，无需复位按钮
+  if (!ok) wxLoading.value = false
+}
 
 const greeting = computed(() => {
   const h = new Date().getHours()
@@ -408,6 +430,43 @@ async function onLogin() {
   opacity: 0.5;
 }
 
+/* 企业微信登录：次级按钮（白底 + 描边 + 品牌绿），与主按钮同高同圆角 */
+.wx-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  width: 100%;
+  margin: 20rpx 0 0;
+  padding: 0;
+  height: 84rpx;
+  line-height: 1.2;
+  border-radius: 999rpx;
+  background: $pm-surface;
+  color: $pm-primary-deep;
+  font-size: 28rpx;
+  font-weight: 750;
+  border: 1px solid $pm-line;
+  box-shadow: $pm-shadow;
+}
+.wx-btn::after {
+  border: none;
+}
+.wx-btn[disabled] {
+  opacity: 0.55;
+}
+.wx-ico {
+  width: 32rpx;
+  height: 32rpx;
+  flex-shrink: 0;
+}
+.wx-txt {
+  font-size: 28rpx;
+  font-weight: 750;
+  letter-spacing: 1rpx;
+}
+
 .divider {
   display: flex;
   flex-direction: row;
@@ -534,6 +593,18 @@ async function onLogin() {
     line-height: 72rpx;
     font-size: 26rpx;
   }
+  .wx-btn {
+    margin-top: 12rpx;
+    height: 72rpx;
+    font-size: 26rpx;
+  }
+  .wx-txt {
+    font-size: 26rpx;
+  }
+  .wx-ico {
+    width: 28rpx;
+    height: 28rpx;
+  }
   .bottom {
     padding-top: 16rpx;
   }
@@ -593,6 +664,10 @@ async function onLogin() {
     margin-top: 58rpx;
     height: 90rpx;
     line-height: 90rpx;
+  }
+  .wx-btn {
+    margin-top: 24rpx;
+    height: 90rpx;
   }
   .bottom {
     padding-top: 32rpx;
