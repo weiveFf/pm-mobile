@@ -90,23 +90,21 @@ const focusField = ref('')
 const submitting = ref(false)
 const account = ref('')
 
-/** 字符类型数：小写 / 大写 / 数字 / 符号 */
-function typeCount(v) {
-  if (!v) return 0
-  let n = 0
-  if (/[a-z]/.test(v)) n += 1
-  if (/[A-Z]/.test(v)) n += 1
-  if (/\d/.test(v)) n += 1
-  if (/[^A-Za-z0-9]/.test(v)) n += 1
-  return n
+/** 是否同时含字母与数字（不再要求符号，也不再用"4 类里凑 3 类"的口径）。
+    后端 Tools.PasswordStrength 只排除「纯数字 / 纯字母 / 纯符号」，本规则更严一点，
+    一定能通过服务端校验。 */
+function hasLetterAndDigit(v) {
+  const s = String(v || '')
+  return /[A-Za-z]/.test(s) && /\d/.test(s)
 }
 
-/** 与 PC 端 resetPwd 规则一致：≥8 位，且至少包含三类字符 */
-const newPwdValid = computed(() => newPassword.value.length >= 8 && typeCount(newPassword.value) >= 3)
+const newPwdValid = computed(
+  () => newPassword.value.length >= 8 && hasLetterAndDigit(newPassword.value)
+)
 
 const ruleList = computed(() => [
   { text: '长度至少 8 位', ok: newPassword.value.length >= 8 },
-  { text: '包含大小写字母、数字、符号中的至少 3 类', ok: typeCount(newPassword.value) >= 3 },
+  { text: '包含字母和数字', ok: hasLetterAndDigit(newPassword.value) },
   { text: '两次输入一致', ok: !!newPassword.value && newPassword.value === confirmPassword.value }
 ])
 
@@ -124,7 +122,9 @@ async function submit() {
     return
   }
   if (!newPwdValid.value) {
-    uni.showToast({ title: '新密码不符合规则', icon: 'none' })
+    // 说清是哪一条不满足，别只丢一句"不符合规则"
+    const msg = newPassword.value.length < 8 ? '密码长度至少 8 位' : '密码需同时包含字母和数字'
+    uni.showToast({ title: msg, icon: 'none' })
     return
   }
   if (newPassword.value !== confirmPassword.value) {
