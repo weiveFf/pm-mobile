@@ -119,11 +119,39 @@ export function resolveRichImageUrl(src, baseURL) {
 }
 
 /**
- * 将富文本 HTML 中的 img src 全部补全，用于详情页 v-html 渲染前
+ * 归一化富文本里 <img> 的尺寸，让移动端自适应容器宽度、等比完整显示。
+ *
+ * 背景：PC 端 wangEditor 插入图片时写死了内联样式
+ *   style="width: 900px; max-width: 100%; max-height: 500px; height: auto; object-fit: contain;"
+ * 其中 `width: 900px` / `max-height: 500px` 在手机窄屏上会让图片撑出容器或被压扁
+ * （表现为「图片显示不全」），且内联样式优先级高于移动端的类选择器，仅靠 CSS 很难覆盖干净。
+ * 因此这里把尺寸相关的内联样式与 width/height 属性统一剥掉，尺寸完全交给移动端 CSS 控制。
+ */
+export function normalizeRichImageSizing(html) {
+  if (!html) return ''
+  return String(html).replace(/<img\b[^>]*>/gi, (tag) => {
+    // 1) 去掉 width/height 属性（如 <img width="900" height="600">）
+    let out = tag.replace(/\s(?:width|height)\s*=\s*(["'])[^"']*\1/gi, '')
+    // 2) 去掉 style 里与尺寸相关的声明，其余（如 border、margin）保留
+    out = out.replace(/\sstyle\s*=\s*(["'])([\s\S]*?)\1/i, (m, quote, css) => {
+      const kept = String(css)
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .filter((s) => !/^(width|max-width|min-width|height|max-height|min-height|object-fit|display)\s*:/i.test(s))
+      return kept.length ? ` style="${kept.join('; ')}"` : ''
+    })
+    return out
+  })
+}
+
+/**
+ * 将富文本 HTML 中的 img src 全部补全 + 尺寸归一化，用于详情页 v-html 渲染前
  */
 export function fixRichTextImageUrls(html, baseURL) {
   if (!html) return ''
-  return html.replace(/<img([^>]*)src=["']([^"']+)["']([^>]*)>/gi, (match, pre, src, post) => {
+  const fixed = html.replace(/<img([^>]*)src=["']([^"']+)["']([^>]*)>/gi, (match, pre, src, post) => {
     return `<img${pre}src="${resolveRichImageUrl(src, baseURL)}"${post}>`
   })
+  return normalizeRichImageSizing(fixed)
 }
