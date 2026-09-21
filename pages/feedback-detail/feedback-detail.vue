@@ -85,6 +85,12 @@
         <view class="cm-composer-wrap">
           <!-- @ 提及候选 -->
           <view v-if="mentionOpen" class="cm-mention">
+            <view class="cm-mention-head">
+              <text class="cm-mention-hint">{{
+                mentionQuery ? '筛选：' + mentionQuery : '输入姓名可筛选同事'
+              }}</text>
+              <text class="cm-mention-close pressable" @click="closeMention">✕</text>
+            </view>
             <view v-if="!mentionList.length" class="cm-mention-empty">无匹配同事</view>
             <scroll-view v-else scroll-y class="cm-mention-list">
               <view
@@ -113,11 +119,13 @@
             <textarea
               class="cm-input"
               :value="commentText"
-              placeholder="写评论，输入 @ 提及同事…"
+              :focus="commentFocus"
+              placeholder="写评论，点 @ 或输入 @ 提及同事…"
               :auto-height="false"
               confirm-type="send"
               @input="onCommentInput"
               @confirm="sendComment"
+              @blur="commentFocus = false"
             />
             <view class="cm-send pressable" @click="sendComment">{{ commenting ? '…' : '发送' }}</view>
           </view>
@@ -340,6 +348,10 @@ const mentionQuery = ref('')
 const mentionStart = ref(-1)
 const mentionCursor = ref(-1)
 const mentionUserIds = ref([])
+/** 评论框最近一次已知的光标位置（点 @ 按钮时用它决定插入点） */
+const commentCursor = ref(-1)
+/** 评论框聚焦状态（非 H5 端用 focus 属性兜底） */
+const commentFocus = ref(false)
 
 const mentionList = computed(() => {
   const me = String(getUserId() || '')
@@ -370,6 +382,7 @@ function onCommentInput(e) {
   const val = (e && e.detail && e.detail.value) || ''
   commentText.value = val
   const cursor = e && e.detail && e.detail.cursor != null ? e.detail.cursor : val.length
+  commentCursor.value = cursor
   const before = val.slice(0, cursor)
   const at = before.lastIndexOf('@')
   if (at < 0) {
@@ -388,14 +401,116 @@ function onCommentInput(e) {
   ensureMentionUsers()
 }
 
-/** 通过「@」按钮唤起候选（插到光标/末尾） */
+/** 找到评论框的原生 textarea（仅 H5 拿得到） */
+function findCommentInput() {
+  // #ifdef H5
+  try {
+    return (
+      document.querySelector('.cm-input textarea') ||
+      document.querySelector('.cm-composer textarea')
+    )
+  } catch (e) {
+    return null
+  }
+  // #endif
+  // #ifndef H5
+  return null
+  // #endif
+}
+
+/**
+ * 写入评论内容并把光标定位到指定位置。
+ *
+ * ⚠️ 关键：评论框是「受控」的（`:value` + `@input` 手动同步），程序化改 `commentText`
+ * 不一定能刷到界面上的 textarea，所以 H5 下**同时直接写原生 textarea**；
+ * 并且聚焦要**同步**执行（`await nextTick()` 之后再 focus 会丢掉用户手势，iOS 键盘不弹）。
+ * 写完在下一帧和 260ms 各兜一次：若被框架重渲染覆盖就重写；用户已继续输入则不动。
+ */
+function applyCommentText(text, caret) {
+  const next = String(text == null ? '' : text)
+  const at = Math.max(0, Math.min(Number(caret) || 0, next.length))
+  commentText.value = next
+
+  // #ifdef H5
+  const el0 = findCommentInput()
+  if (el0) {
+    try {
+      if (el0.value !== next) el0.value = next
+      el0.focus()
+      if (el0.setSelectionRange) el0.setSelectionRange(at, at)
+      commentCursor.value = at
+    } catch (e) {
+      /* 忽略 */
+    }
+    const fix = () => {
+      if (commentText.value !== next) return // 用户已继续输入，不要回写
+      try {
+        const el = findCommentInput()
+        if (!el) return
+        if (el.value !== next) {
+          el.value = next
+          if (el.setSelectionRange) el.setSelectionRange(at, at)
+          commentCursor.value = at
+        }
+      } catch (e) {
+        /* 忽略 */
+      }
+    }
+    nextTick(fix)
+    setTimeout(fix, 260)
+    return
+  }
+  // #endif
+
+  commentCursor.value = at
+  commentFocus.value = false
+  nextTick(() => {
+    commentFocus.value = true
+  })
+}
+
+/**
+ * 「@」按钮：把 @ 插入输入框的光标处并聚焦，
+ * 之后继续打字即可按姓名筛选候选（与 PC 端「输入 @ 唤起」的体验一致）。
+ */
 function openMention() {
   ensureMentionUsers()
   const val = String(commentText.value || '')
-  mentionStart.value = val.length
-  mentionCursor.value = val.length
+  let pos = Number(commentCursor.value)
+  if (!Number.isFinite(pos) || pos < 0 || pos > val.length) pos = val.length
+
+  // 光标前已经是 @（例如连点两下按钮）→ 只把候选重新唤出，不重复插入
+  if (pos > 0 && val.charAt(pos - 1) === '@') {
+    mentionStart.value = pos - 1
+    mentionCursor.value = pos
+    mentionQuery.value = ''
+    mentionOpen.value = true
+    applyCommentText(val, pos)
+    return
+  }
+
+  const next = pos + 1
+  mentionStart.value = pos
+  mentionCursor.value = next
   mentionQuery.value = ''
-  mentionOpen.value = !mentionOpen.value
+  mentionOpen.value = true
+  applyCommentText(val.slice(0, pos) + '@' + val.slice(pos), next)
+}
+
+/** 关闭候选：若刚插入的 @xxx 还没选人，一并抹掉，避免留下孤立的 @ */
+function closeMention() {
+  mentionOpen.value = false
+  const val = String(commentText.value || '')
+  const start = mentionStart.value
+  mentionStart.value = -1
+  mentionCursor.value = -1
+  mentionQuery.value = ''
+  if (start >= 0 && start < val.length) {
+    const m = val.slice(start).match(/^@[^\s@]*/)
+    if (m) {
+      applyCommentText(val.slice(0, start) + val.slice(start + m[0].length), start)
+    }
+  }
 }
 
 function pickMention(u) {
@@ -405,7 +520,6 @@ function pickMention(u) {
   const start = mentionStart.value >= 0 ? mentionStart.value : val.length
   const cursor = mentionCursor.value >= 0 ? mentionCursor.value : val.length
   const insert = '@' + name + ' '
-  commentText.value = val.slice(0, start) + insert + val.slice(cursor)
   if (u.userId != null && !mentionUserIds.value.includes(u.userId)) {
     mentionUserIds.value.push(u.userId)
   }
@@ -413,6 +527,8 @@ function pickMention(u) {
   mentionStart.value = -1
   mentionCursor.value = -1
   mentionQuery.value = ''
+  // 选完把光标停在插入内容之后，方便接着打字（不打断输入）
+  applyCommentText(val.slice(0, start) + insert + val.slice(cursor), start + insert.length)
 }
 
 /** 从文本里回捞 @ 到的成员 ID（与 PC collectMentionIdsFromContent 一致） */
@@ -1012,16 +1128,9 @@ onUnmounted(() => {
   white-space: normal;
 }
 
-/* 富文本内的图片（问题描述/处理要求/评论/操作记录留言通用） */
-.rich-body img,
-.cm-rich img,
-.log-remark-body img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 12rpx 0;
-  border-radius: 12rpx;
-}
+/* 富文本内的图片样式——注意：v-html 注入的节点不带 scoped 属性，
+   此处写 scoped 选择器是不生效的，统一维护在文件末尾的全局 style 块里，
+   别改这里（历史上的坑就在这）。 */
 .cm-rich p,
 .log-remark-body p {
   margin: 0 0 8rpx;
@@ -1250,6 +1359,25 @@ onUnmounted(() => {
   overflow: hidden;
   z-index: 5;
 }
+.cm-mention-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 24rpx;
+  border-bottom: 1px solid $pm-line;
+  background: $pm-bg-2;
+}
+.cm-mention-hint {
+  font-size: 22rpx;
+  color: $pm-muted;
+}
+.cm-mention-close {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: $pm-muted;
+  padding: 0 10rpx;
+}
 .cm-mention-list {
   max-height: 420rpx;
 }
@@ -1306,6 +1434,10 @@ onUnmounted(() => {
 .cm-input {
   flex: 1;
   height: 76rpx;
+  /* H5：uni 的 textarea 内层（.uni-textarea-textarea / .uni-textarea-placeholder）
+     是绝对定位、从顶部开始排版的，且 line-height:inherit。
+     把行高撑成胶囊高度，单行文字与占位文字才会垂直居中（原来只有 font-size，看着偏上）。 */
+  line-height: 76rpx;
   padding: 0 28rpx;
   background: $pm-bg-2;
   border-radius: 999rpx;
@@ -1456,13 +1588,48 @@ onUnmounted(() => {
 <style lang="scss">
 @import '@/uni.scss';
 
-/* v-html 渲染的富文本图片全局样式，确保不撑出屏幕（v-html 内容不带 scoped 属性，须放全局） */
+/* v-html 渲染的富文本容器：强制占满父级宽度、不允许被内容撑开。
+   PC 端 wangEditor 插入的图片带内联 width:900px，若某层容器是「按内容定宽」，
+   容器会被撑到 900px，此时子元素的 max-width:100% 也跟着变成 900px（百分比失效），
+   表现就是图片只显示左半边。width:100% 用来打断这个循环。 */
+.rich-body,
+.cm-rich,
+.cm-quote-body,
+.log-remark-body {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+/* 兜底：容器内任何后代都不允许超出容器宽度。
+   富文本里可能还有带固定宽度的包装元素（不只是 img 自己），
+   这里统一压住，避免个别节点把整体撑出屏幕。 */
+.rich-body *,
+.cm-rich *,
+.cm-quote-body *,
+.log-remark-body * {
+  max-width: 100% !important;
+}
+
+/* v-html 渲染的富文本图片全局样式：确保不撑出屏幕、等比完整显示
+   （v-html 内容不带 scoped 属性，必须放全局）
+   三道保险：
+     1) HTML 侧由 utils/richText.js 的 normalizeRichImageSizing 剥掉尺寸声明；
+     2) 这里用 !important 覆盖任何残留的内联样式；
+     3) max-width 用 min(100%, 86vw) 兜底 —— 86vw ≈ 屏幕宽减去卡片左右内边距
+        （内容区 24rpx×2 + 卡片 28rpx×2 = 104rpx ≈ 14vw），
+        这样即使上层容器宽度异常，图片也不会超出屏幕。 */
 .rich-body img,
 .cm-rich img,
+.cm-quote-body img,
 .log-remark-body img {
-  display: block;
-  max-width: 100%;
-  height: auto;
+  display: block !important;
+  width: auto !important;
+  max-width: 100% !important; /* 老内核不支持 min() 时的兜底 */
+  max-width: min(100%, 86vw) !important;
+  height: auto !important;
+  max-height: none !important;
   margin: 12rpx 0;
   border-radius: 12rpx;
 }
