@@ -81,6 +81,21 @@
       <!-- 底部留白，避免贴 TabBar -->
       <view class="bottom-spacer" />
     </view>
+
+    <!-- 退出确认：自定义弹窗（替代系统 uni.showModal，与设计系统一致） -->
+    <view v-if="showLogoutConfirm" class="md-mask" @click="cancelLogout">
+      <view class="md-card" @click.stop>
+        <view class="md-ico">⇥</view>
+        <text class="md-title">退出登录</text>
+        <text class="md-desc">退出后需要重新输入账号密码，确定要退出吗？</text>
+        <view class="md-actions">
+          <view class="md-btn ghost pressable" @click="cancelLogout">再想想</view>
+          <view class="md-btn danger pressable" @click="confirmLogout">
+            {{ loggingOut ? '退出中…' : '退出登录' }}
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -95,6 +110,9 @@ import { logoutApi } from '@/api/login.js'
 const userName = ref('')
 const userId = ref('')
 const version = config.version
+/** 退出确认弹窗：显隐 + 退出中（防重复点击） */
+const showLogoutConfirm = ref(false)
+const loggingOut = ref(false)
 
 const avatarLetter = computed(() => {
   const n = (userName.value || 'Y').trim()
@@ -124,11 +142,29 @@ function goChangePwd() {
   uni.navigateTo({ url: '/pages/change-password/change-password' })
 }
 
-async function logout() {
+/** 点「退出登录」：打开自定义确认弹窗（不再用系统 uni.showModal） */
+function logout() {
+  if (loggingOut.value) return
+  showLogoutConfirm.value = true
+}
+
+/** 关闭弹窗（点遮罩或「再想想」）；退出中不允许关闭 */
+function cancelLogout() {
+  if (loggingOut.value) return
+  showLogoutConfirm.value = false
+}
+
+/** 确认退出：清服务端会话 + 本地登录态，然后回登录页 */
+async function confirmLogout() {
+  if (loggingOut.value) return
+  loggingOut.value = true
   try {
     await logoutApi()
-  } catch (e) {}
+  } catch (e) {
+    /* 接口失败也继续本地清理，避免卡在「已登录但 token 无效」的状态 */
+  }
   clearAuth()
+  // reLaunch 会卸载本页，无需复位 loading 状态
   uni.reLaunch({ url: '/pages/login/login' })
 }
 
@@ -379,5 +415,103 @@ onShow(() => {
 }
 .logout-arrow {
   color: $pm-danger;
+}
+
+/* —— 退出确认弹窗（自定义，替代系统 uni.showModal） ——
+   遮罩色与筛选遮罩统一；卡片用 radius-lg + shadow-lg；
+   入场做一次轻微的上浮放大，避免"系统弹窗"那种生硬感。 */
+.md-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  /* 高于页面内所有浮层与底部 tabbar */
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 64rpx;
+  background: rgba(20, 30, 24, 0.45);
+  animation: mdFadeIn 0.18s ease both;
+}
+.md-card {
+  width: 100%;
+  max-width: 560rpx;
+  padding: 44rpx 40rpx 32rpx;
+  background: $pm-surface;
+  border-radius: $pm-radius-lg;
+  box-shadow: $pm-shadow-lg;
+  text-align: center;
+  box-sizing: border-box;
+  animation: mdPopIn 0.24s $pm-press-ease both;
+}
+/* 危险语义的图标块，和「退出登录」那一行的瓷贴同一套配色 */
+.md-ico {
+  width: 88rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  margin: 0 auto 22rpx;
+  border-radius: 28rpx;
+  background: $pm-danger-soft;
+  color: $pm-danger;
+  font-size: 40rpx;
+  font-weight: 700;
+}
+.md-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 800;
+  color: $pm-text;
+}
+.md-desc {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 25rpx;
+  line-height: 1.6;
+  color: $pm-text-secondary;
+}
+.md-actions {
+  display: flex;
+  flex-direction: row;
+  margin-top: 36rpx;
+}
+.md-btn {
+  flex: 1;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 999rpx;
+  font-size: 27rpx;
+  font-weight: 750;
+  text-align: center;
+}
+.md-btn.ghost {
+  margin-right: 20rpx;
+  background: $pm-bg-2;
+  color: $pm-text-secondary;
+}
+/* 确认按钮不用实心大红（与整体配色气质更统一）：
+   浅粉底 + 危险色文字，和上方图标块是同一套配色，也和「退出登录」那一行的瓷贴一致 */
+.md-btn.danger {
+  background: $pm-danger-soft;
+  color: $pm-danger;
+}
+@keyframes mdFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes mdPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(16rpx);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 </style>
