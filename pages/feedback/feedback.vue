@@ -141,6 +141,9 @@
         <button class="fb-reset" @click="reset">重置</button>
         <button class="fb-apply" @click="applyFilter">确定</button>
       </view>
+
+      <!-- 展开时遮住下方列表区域：点击遮罩收起筛选（避免误点卡片进详情） -->
+      <view class="fb-mask" @click="closeFilter" />
     </view>
 
     <!-- 唯一滚动区域：页面固定，仅列表滚动 -->
@@ -413,6 +416,11 @@ async function loadDepts() {
 function toggleFilter() {
   showFilter.value = !showFilter.value
   if (showFilter.value && mode.value === 'list') loadDepts()
+}
+
+/** 收起筛选面板（点遮罩触发） */
+function closeFilter() {
+  showFilter.value = false
 }
 
 function onDept(e) {
@@ -763,6 +771,9 @@ const { pullY, status, text, progress, touchStart, touchMove, touchEnd } = usePu
 
 /* 内联筛选面板：原地下滑，不占列表空间时收起 */
 .fb-filter {
+  /* 遮罩以面板为参照，从面板底边往下铺满剩余区域 */
+  position: relative;
+  z-index: 20;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -771,6 +782,18 @@ const { pullY, status, text, progress, touchStart, touchMove, touchEnd } = usePu
   border-top: 1px solid $pm-line;
   border-bottom: 1px solid $pm-line;
   box-sizing: border-box;
+}
+/* 筛选展开时的遮罩：盖住下方列表，点击即收起筛选。
+   top:100% = 面板底边；高度取 100vh，超出页面部分由 .fb-page 的 overflow:hidden 裁掉（不会盖到底部 tabbar）。
+   色值与项目页 .pj-mask 保持一致。 */
+.fb-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 100vh;
+  z-index: 30;
+  background: rgba(20, 30, 24, 0.45);
 }
 .fb-filter-scroll {
   flex: 1;
