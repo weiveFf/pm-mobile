@@ -833,7 +833,7 @@ onReachBottom(() => fetchList(false))
 .seg {
   display: flex;
   flex-direction: row;
-  padding: 4rpx 24rpx;
+  padding: 24rpx 24rpx 4rpx;
 }
 .seg-item {
   flex: 1;
