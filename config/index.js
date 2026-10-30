@@ -2,10 +2,10 @@
  * 项目管理手机端配置（与 YessysWebVue / handheld 后端地址保持一致）
  *
  * 后端地址策略：
- * - 生产（H5 打包 + Nginx 反代）：baseURL 走**同源相对路径** `/api`，
- *   由 Nginx 把 `/api/` 转发到后端，前端无需（也不应）写死后端地址。
- * - 开发（HBuilderX 运行到浏览器/真机）：仍可直连后端绝对地址。
- * 请求最终 URL = baseURL + 接口路径，例如 `/api/system/user/list`。
+ * - 生产（H5 打包 + Nginx 反代）：baseURL 走**同源相对路径** `/prod-api`，
+ *   由 Nginx 把 `/prod-api/` 转发到后端，前端无需（也不应）写死后端地址。
+ * - 开发（HBuilderX 运行到浏览器/真机）：直连后端绝对地址（后端已开放 CORS，允许跨域）。
+ * 请求最终 URL = baseURL + 接口路径，例如 `/prod-api/system/user/list`。
  */
 const isProd = process.env.NODE_ENV === 'production'
 

@@ -22,7 +22,7 @@
           v-for="node in renderNodes"
           :key="node.deptId"
           class="node"
-          :class="{ active: modelValue === node.deptId }"
+          :class="{ active: modelValue === node.deptId, disabled: !!node.disabled }"
           :style="{ paddingLeft: (node.level || 0) * 32 + 24 + 'rpx' }"
           @click="select(node)"
         >
@@ -35,7 +35,8 @@
           </text>
           <text v-else class="toggle placeholder" />
           <text class="name">{{ node.deptName }}</text>
-          <text v-if="modelValue === node.deptId" class="check">✓</text>
+          <text v-if="node.disabled" class="disabled-tip">不可选</text>
+          <text v-else-if="modelValue === node.deptId" class="check">✓</text>
         </view>
         <view class="panel-safe" />
       </scroll-view>
@@ -50,7 +51,9 @@ const props = defineProps({
   modelValue: { type: [String, Number], default: '' },
   depts: { type: Array, default: () => [] },
   placeholder: { type: String, default: '请选择' },
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  /** 返回 false 时不选中、不关闭面板 */
+  beforeSelect: { type: Function, default: null }
 })
 const emit = defineEmits(['update:modelValue', 'change'])
 
@@ -155,6 +158,11 @@ function toggle(node) {
 }
 
 function select(node) {
+  if (props.beforeSelect) {
+    const ok = props.beforeSelect(node)
+    if (ok === false) return
+  }
+  if (node && node.disabled) return
   emit('update:modelValue', node.deptId)
   emit('change', node.deptId)
   close()
@@ -293,6 +301,16 @@ watch(
 .node.active .name {
   color: $pm-primary;
   font-weight: 750;
+}
+.node.disabled .name {
+  color: $pm-muted;
+  opacity: 0.65;
+}
+.disabled-tip {
+  margin-left: 12rpx;
+  font-size: 22rpx;
+  color: #c45c26;
+  flex-shrink: 0;
 }
 .toggle {
   width: 40rpx;

@@ -5,21 +5,7 @@
     <view class="cp-body">
       <view class="intro">
         <text class="intro-t">设置新密码</text>
-        <text class="intro-s">账号 {{ account || '-' }} · 修改后请使用新密码登录</text>
-      </view>
-
-      <view class="field" :class="{ focus: focusField === 'old' }">
-        <text class="lb">原密码</text>
-        <input
-          v-model="oldPassword"
-          class="ipt"
-          :password="!showPwd"
-          placeholder="请输入原密码"
-          placeholder-class="ph"
-          confirm-type="next"
-          @focus="onFocus('old')"
-          @blur="onBlur"
-        />
+        <text class="intro-s">账号 {{ account || '-' }} · 修改成功后将发送企业微信通知</text>
       </view>
 
       <view class="field" :class="{ focus: focusField === 'new' }">
@@ -70,7 +56,7 @@
         确认修改
       </button>
 
-      <text class="foot-tip">如忘记原密码，请联系管理员重置</text>
+      <text class="foot-tip">修改成功后新密码会发送到企业微信</text>
     </view>
 
     <view class="pm-safe-bottom" />
@@ -82,7 +68,6 @@ import { ref, computed } from 'vue'
 import { getAccount, getUserName } from '@/utils/auth.js'
 import { updateUserPwd } from '@/api/system.js'
 
-const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const showPwd = ref(false)
@@ -117,12 +102,7 @@ function onBlur() {
 
 async function submit() {
   if (submitting.value) return
-  if (!oldPassword.value) {
-    uni.showToast({ title: '请输入原密码', icon: 'none' })
-    return
-  }
   if (!newPwdValid.value) {
-    // 说清是哪一条不满足，别只丢一句"不符合规则"
     const msg = newPassword.value.length < 8 ? '密码长度至少 8 位' : '密码需同时包含字母和数字'
     uni.showToast({ title: msg, icon: 'none' })
     return
@@ -131,15 +111,11 @@ async function submit() {
     uni.showToast({ title: '两次输入的密码不一致', icon: 'none' })
     return
   }
-  if (newPassword.value === oldPassword.value) {
-    uni.showToast({ title: '新密码不能和原密码相同', icon: 'none' })
-    return
-  }
 
   submitting.value = true
   try {
-    await updateUserPwd(oldPassword.value, newPassword.value)
-    uni.showToast({ title: '修改成功', icon: 'success' })
+    await updateUserPwd(newPassword.value)
+    uni.showToast({ title: '修改成功，已发送企业微信', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 900)
   } catch (e) {
     uni.showToast({ title: (e && e.message) || '修改失败', icon: 'none' })

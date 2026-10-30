@@ -49,7 +49,13 @@
 
             <view class="field">
               <text class="label required">处理部门</text>
-              <dept-tree-picker v-model="form.deptId" :depts="deptFlat" :disabled="isDeptLocked" @change="onDept" />
+              <dept-tree-picker
+                v-model="form.deptId"
+                :depts="handlerDeptFlat"
+                :disabled="isDeptLocked"
+                :before-select="beforeDeptSelect"
+                @change="onDept"
+              />
               <text v-if="deptLockHint" class="hint warn">{{ deptLockHint }}</text>
               <text v-else-if="handlerPairDisplay && handlerPairDisplay !== '-'" class="hint">
                 处理人/负责人：{{ handlerPairDisplay }}
@@ -396,6 +402,29 @@ const handlerPairDisplay = computed(() => {
   return a || b
 })
 
+const BLOCKED_FEEDBACK_HANDLER_NAMES = ['肖秋贵']
+const SELECT_CHILD_DEPT_TIP = '请选择下属子部门进行反馈'
+
+function isBlockedHandlerPersonName(name) {
+  const n = String(name || '').trim()
+  if (!n) return false
+  return BLOCKED_FEEDBACK_HANDLER_NAMES.some((x) => n === x || n.indexOf(x) >= 0)
+}
+
+function isDeptBlockedByHandlerName(deptId) {
+  const dept = findNearestDeptWithLeader(deptId)
+  if (!dept) return false
+  const names = [
+    dept.viewInfo && dept.viewInfo.firstContactNameText,
+    dept.viewInfo && dept.viewInfo.leaderNameText,
+    dept.firstContactUserName,
+    dept.leaderName
+  ]
+  return names.some((n) => isBlockedHandlerPersonName(n))
+}
+
+const handlerDeptFlat = computed(() => deptFlat.value || [])
+
 function calcUrgency(dateStr) {
   if (!dateStr) {
     form.urgencyLevel = undefined
@@ -444,6 +473,14 @@ function onProblem(e) {
   form.problemType = problemOptions.value[problemIndex.value].value
 }
 
+function beforeDeptSelect(node) {
+  if (node && isDeptBlockedByHandlerName(node.deptId)) {
+    uni.showToast({ title: SELECT_CHILD_DEPT_TIP, icon: 'none' })
+    return false
+  }
+  return true
+}
+
 function onDept(deptId) {
   form.deptId = deptId
   applyDeptHandlers(form.deptId)
@@ -469,6 +506,7 @@ function validateBasic() {
   if (!form.abnormalType) return '请选择异常类型'
   if (problemOptions.value.length && !form.problemType) return '请选择问题类型'
   if (!form.deptId) return '请选择处理部门'
+  if (isDeptBlockedByHandlerName(form.deptId)) return SELECT_CHILD_DEPT_TIP
   if (!form.demandFinishTime) return '请选择期望完成日期'
   if (form.abnormalType === '客诉') {
     if (!form.complaintDeptId && !form.complaintUserId) return '请选择被投诉部门或被投诉人'

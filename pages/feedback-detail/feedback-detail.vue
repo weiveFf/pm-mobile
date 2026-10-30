@@ -69,7 +69,10 @@
 
         <scroll-view class="cm-list" scroll-y :scroll-into-view="cmIntoView" :show-scrollbar="false">
           <view v-for="c in commentViews" :key="c.id" class="cm-item" :class="{ me: c.mine }">
-            <view class="cm-avatar" :style="{ background: c.avatarBg }">{{ c.avatarChar }}</view>
+            <view class="cm-avatar" :style="c.avatarUrl ? null : { background: c.avatarBg }">
+              <image v-if="c.avatarUrl" class="cm-avatar-img" :src="c.avatarUrl" mode="aspectFill" />
+              <text v-else>{{ c.avatarChar }}</text>
+            </view>
             <view class="cm-body">
               <view class="cm-meta">
                 <text class="cm-name">{{ c.name }}</text>
@@ -384,11 +387,13 @@ const commentViews = computed(() =>
     const name =
       c.createNickName || c.CreateNickName || c.createByNickName || c.create_by || c.Create_by || '用户'
     const parts = parseQuotedContent(c.content)
+    const avatarRaw = c.createAvatar || c.CreateAvatar || ''
     return {
       id: c.id,
       name,
       avatarChar: avatarChar(name),
       avatarBg: avatarColor(name),
+      avatarUrl: avatarRaw ? resolveUploadUrl(avatarRaw, baseURL) : '',
       time: c.create_time || c.createTime || '',
       mine: isMine(c),
       images: commentImages(c),
@@ -1450,6 +1455,13 @@ onUnmounted(() => {
   font-weight: 800;
   text-align: center;
   line-height: 64rpx;
+  overflow: hidden;
+}
+.cm-avatar-img {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  display: block;
 }
 .cm-body {
   flex: 1;
