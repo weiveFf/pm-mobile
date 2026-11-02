@@ -35,6 +35,10 @@
         </view>
       </view>
 
+      <view v-if="salesSubDeptCompleteHint" class="flow-hint">
+        <text>{{ salesSubDeptCompleteHint }}</text>
+      </view>
+
       <scroll-view scroll-x class="tabs-scroll" :show-scrollbar="false">
         <view class="tabs">
           <text
@@ -236,6 +240,12 @@
             <view v-if="canAssignRecipient" class="dock-btn" @click="goChangeRecipient">改处理人</view>
             <view v-if="canReassignDept" class="dock-btn" @click="goReassign">改部门</view>
             <view v-if="canComplaintAudit" class="dock-btn warn" @click="goComplaint">客诉审核</view>
+            <view v-if="canCombinedCompleteAndTechAudit" class="dock-btn main" @click="goSalesComplete(true)">完善并通过审核</view>
+            <view v-else-if="canSubmitSalesComplete" class="dock-btn main" @click="goSalesComplete(false)">完善并提交</view>
+            <view v-if="canRejectSalesTechOnComplete" class="dock-btn danger" @click="goSalesTechAudit('reject')">技术服务驳回</view>
+            <view v-if="canReviewSalesTech" class="dock-btn main" @click="goSalesTechAudit('approve')">技术服务通过</view>
+            <view v-if="canReviewSalesTech" class="dock-btn danger" @click="goSalesTechAudit('reject')">技术服务驳回</view>
+            <view v-if="canResubmitSalesTech" class="dock-btn warn" @click="goSalesResubmit">修改重提</view>
           </view>
         </scroll-view>
       </view>
@@ -250,6 +260,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getUserId, getAccount, getIsDeptLeader, getIsFirstContact, getBaseURL } from '@/utils/auth.js'
 import {
   getProcessFeedbackContext,
+  getProductFeedbackById,
   getFeedbackComments,
   addFeedbackComment,
   markProcessResponded,
@@ -291,6 +302,8 @@ const uploadingImg = ref(false)
 const statusLabel = ref('-')
 const statusTone = ref('')
 const statusKey = ref('')
+
+const TECH_SERVICE_DEPT_ID = 288
 
 const uid = computed(() => Number(getUserId()))
 /** 登录账号：后端 create_by / Create_by 存的是账号（不是 userId、不是昵称） */
@@ -793,6 +806,14 @@ function scopeDeptId(f) {
   return null
 }
 
+function parseDeptLeaderUserIds(leaderField) {
+  if (leaderField == null || leaderField === '') return []
+  return String(leaderField)
+    .split(/[,，]/)
+    .map((s) => Number(String(s).trim()))
+    .filter((n) => Number.isFinite(n) && n > 0)
+}
+
 async function loadDeptRoleMap() {
   if (deptsLoaded.value) return
   try {
@@ -801,7 +822,7 @@ async function loadDeptRoleMap() {
     const lm = {}
     const fm = {}
     rows.forEach((d) => {
-      lm[String(d.deptId)] = d.leader != null && d.leader !== '' ? Number(d.leader) : null
+      lm[String(d.deptId)] = d.leader != null && d.leader !== '' ? d.leader : null
       const fc = d.firstContactUserId
       fm[String(d.deptId)] = fc != null && fc !== '' && Number(fc) > 0 ? Number(fc) : null
     })
@@ -811,6 +832,22 @@ async function loadDeptRoleMap() {
   } catch (e) {
     /* 部门数据拉取失败不阻塞详情 */
   }
+}
+
+function isUserExactDeptLeaderForFeedback(f, deptId) {
+  if (!deptId || !uid.value) return false
+  return parseDeptLeaderUserIds(deptLeaderByDeptId.value[String(deptId)]).includes(uid.value)
+}
+
+function isTechServiceAuditorUser() {
+  const u = uid.value
+  if (!u) return false
+  const leaderIds = parseDeptLeaderUserIds(deptLeaderByDeptId.value[String(TECH_SERVICE_DEPT_ID)])
+  const fcRaw = deptFirstContactByDeptId.value[String(TECH_SERVICE_DEPT_ID)]
+  const fcId = fcRaw != null && fcRaw !== '' ? Number(fcRaw) : null
+  if (leaderIds.includes(u)) return true
+  if (fcId != null && u === fcId) return true
+  return false
 }
 
 /** getInfo 是否标记为部门负责人/第一接口人；后端未返回时不做限制，避免按钮全部消失 */
@@ -831,8 +868,7 @@ const canOperateDeptWorkflow = computed(() => {
   if (u === Number(f.theFirstHandlerId)) return true
   const did = scopeDeptId(f)
   if (did == null) return false
-  const lid = deptLeaderByDeptId.value[String(did)]
-  if (lid != null && u === lid) return true
+  if (parseDeptLeaderUserIds(deptLeaderByDeptId.value[String(did)]).includes(u)) return true
   const fid = deptFirstContactByDeptId.value[String(did)]
   if (fid != null && u === fid) return true
   return false
@@ -840,12 +876,74 @@ const canOperateDeptWorkflow = computed(() => {
 
 const isComplaintPending = computed(() => statusKey.value === FEEDBACK_WORKFLOW_STATUS.COMPLAINT_PENDING_AUDIT)
 
-const canRespond = computed(() =>
-  canRespondFeedbackRow({ feedback: fb.value, processList: processList.value }, uid.value)
+const techServiceAuditStatus = computed(() =>
+  Number(fb.value?.techServiceAuditStatus ?? fb.value?.TechServiceAuditStatus ?? 0)
 )
+const isSalesTechPendingSubDept = computed(() =>
+  statusKey.value === FEEDBACK_WORKFLOW_STATUS.SALES_TECH_PENDING_SUBDEPT_COMPLETE ||
+  techServiceAuditStatus.value === 4
+)
+const isSalesTechPendingAudit = computed(() =>
+  statusKey.value === FEEDBACK_WORKFLOW_STATUS.SALES_TECH_PENDING_AUDIT || techServiceAuditStatus.value === 1
+)
+const isSalesTechRejected = computed(() =>
+  statusKey.value === FEEDBACK_WORKFLOW_STATUS.SALES_TECH_REJECTED || techServiceAuditStatus.value === 3
+)
+
+const canSubmitSalesComplete = computed(() => {
+  const f = fb.value
+  if (!f || f.isClose || f.isWithdrawn) return false
+  if (!isSalesTechPendingSubDept.value) return false
+  if (f.canSubmitSalesSubDeptToTechAudit === true || f.CanSubmitSalesSubDeptToTechAudit === true) return true
+  const did = scopeDeptId(f)
+  return isUserExactDeptLeaderForFeedback(f, did)
+})
+
+const canCombinedCompleteAndTechAudit = computed(() => {
+  const f = fb.value
+  if (!f || f.isClose || f.isWithdrawn) return false
+  if (!isSalesTechPendingSubDept.value) return false
+  if (f.canCombinedCompleteAndTechAudit === true || f.CanCombinedCompleteAndTechAudit === true) return true
+  return canSubmitSalesComplete.value && isTechServiceAuditorUser()
+})
+
+const canRejectSalesTechOnComplete = computed(() => canCombinedCompleteAndTechAudit.value)
+
+const canReviewSalesTech = computed(() => {
+  const f = fb.value
+  if (!f || f.isClose) return false
+  if (!isSalesTechPendingAudit.value) return false
+  return isTechServiceAuditorUser()
+})
+
+const canResubmitSalesTech = computed(() => {
+  const f = fb.value
+  if (!f || f.isClose || f.isWithdrawn) return false
+  if (!isSalesTechRejected.value) return false
+  return isCreator.value
+})
+
+const salesTechBlocksNormalWorkflow = computed(
+  () =>
+    isSalesTechPendingSubDept.value || isSalesTechPendingAudit.value || isSalesTechRejected.value
+)
+
+const salesSubDeptCompleteHint = computed(() => {
+  if (!isSalesTechPendingSubDept.value || canSubmitSalesComplete.value) return ''
+  const f = fb.value
+  if (!f) return ''
+  const deptLabel = f.deptName || '所选子部门'
+  return `待完善：由【${deptLabel}】负责人操作；若未配置负责人，则由向上第一个有负责人的上级部门负责人操作。`
+})
+
+const canRespond = computed(() => {
+  if (salesTechBlocksNormalWorkflow.value || isComplaintPending.value) return false
+  return canRespondFeedbackRow({ feedback: fb.value, processList: processList.value }, uid.value)
+})
 const canProcess = computed(() => {
   const f = fb.value
   if (!f || f.isClose || f.isWithdrawn) return false
+  if (salesTechBlocksNormalWorkflow.value || isComplaintPending.value) return false
   if (!openProcess.value) return false
   return isRecipientOrIv.value
 })
@@ -867,12 +965,27 @@ const canReapply = computed(() => {
   if (!isCreator.value) return false
   return isCompleted.value
 })
+/** 申请延期：与 PC canApplyDelay 一致——须存在未完结处理单，且为接收人或干预人；预审/客诉待审阶段不展示 */
 const canDelayApply = computed(() => {
   const f = fb.value
   if (!f || f.isClose || f.isWithdrawn) return false
   if (isCompleted.value) return false
   if (Number(f.delayApplyStatus || 0) === 1) return false
-  return isRecipientOrIv.value
+  if (
+    isComplaintPending.value ||
+    isSalesTechPendingSubDept.value ||
+    isSalesTechPendingAudit.value ||
+    isSalesTechRejected.value
+  ) {
+    return false
+  }
+  const op = openProcess.value
+  if (!op) return false
+  const u = uid.value
+  if (!u) return false
+  const iv = f.interventionPersonnelId != null ? Number(f.interventionPersonnelId) : null
+  const recipientId = Number(op.recipientId ?? op.recipient_id)
+  return recipientId === u || (iv != null && u === iv)
 })
 /** 创建人：有延期待审批时可同意 / 驳回（与 PC canReviewDelay 一致） */
 const canReviewDelay = computed(() => {
@@ -886,7 +999,14 @@ const canAssignRecipient = computed(() => {
   const f = fb.value
   if (!f || f.isClose || f.isWithdrawn) return false
   if (!hasDeptRole()) return false
-  if (isComplaintPending.value) return false
+  if (
+    isComplaintPending.value ||
+    isSalesTechPendingSubDept.value ||
+    isSalesTechPendingAudit.value ||
+    isSalesTechRejected.value
+  ) {
+    return false
+  }
   if (Number(f.complaintAuditStatus ?? f.ComplaintAuditStatus ?? 0) === 3) return false
   return canOperateDeptWorkflow.value
 })
@@ -911,9 +1031,24 @@ async function load() {
   if (!id.value) return
   loading.value = true
   try {
-    const res = await getProcessFeedbackContext(id.value)
+    const [res, detailRes] = await Promise.all([
+      getProcessFeedbackContext(id.value),
+      getProductFeedbackById(id.value).catch(() => null)
+    ])
     const data = res.data || {}
     fb.value = data.feedback || data
+    const detail = detailRes && (detailRes.data || detailRes)
+    if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+      fb.value = {
+        ...fb.value,
+        techServiceAuditStatus:
+          detail.techServiceAuditStatus ?? detail.TechServiceAuditStatus ?? fb.value.techServiceAuditStatus,
+        canSubmitSalesSubDeptToTechAudit:
+          detail.canSubmitSalesSubDeptToTechAudit ?? detail.CanSubmitSalesSubDeptToTechAudit,
+        canCombinedCompleteAndTechAudit:
+          detail.canCombinedCompleteAndTechAudit ?? detail.CanCombinedCompleteAndTechAudit
+      }
+    }
     processList.value = data.processList || []
     logs.value = data.operationLogs || data.logs || []
     const display = resolveFeedbackWorkflowDisplay({
@@ -1104,6 +1239,17 @@ function goDelayReview(mode) {
 function goComplaint() {
   uni.navigateTo({ url: '/pages/complaint-audit/complaint-audit?id=' + id.value })
 }
+function goSalesComplete(combined) {
+  let url = '/pages/sales-tech-edit/sales-tech-edit?id=' + id.value + '&flow=complete'
+  if (combined) url += '&combined=1'
+  uni.navigateTo({ url })
+}
+function goSalesResubmit() {
+  uni.navigateTo({ url: '/pages/sales-tech-edit/sales-tech-edit?id=' + id.value + '&flow=resubmit' })
+}
+function goSalesTechAudit(mode) {
+  uni.navigateTo({ url: '/pages/sales-tech-audit/sales-tech-audit?id=' + id.value + '&mode=' + mode })
+}
 
 function refreshEntryPage() {
   isEntryPage.value = checkEntryPage()
@@ -1246,6 +1392,16 @@ onUnmounted(() => {
   font-size: 24rpx;
   color: rgba(255, 255, 255, 0.85);
   line-height: 1.6;
+}
+
+.flow-hint {
+  margin: 0 24rpx 16rpx;
+  padding: 20rpx 24rpx;
+  background: $pm-warn-soft;
+  border-radius: $pm-radius;
+  font-size: 24rpx;
+  line-height: 1.55;
+  color: $pm-warn;
 }
 
 .panel {

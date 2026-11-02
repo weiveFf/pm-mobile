@@ -1,10 +1,12 @@
 const REMARK_SEP = '；说明：'
-const USER_ID_MARKER_RE = /(?:\|)?(?:fromUserId|toUserId):\d+(?:\|)?/gi
+const USER_ID_MARKER_RE = /(?:\|)?(?:fromUserId|toUserId|handlerFromUserId|handlerToUserId):\d+(?:\|)?/gi
+const DEPT_NAME_MARKER_RE = /(?:\|)?(?:fromDeptName|toDeptName):[^|]*(?:\|)?/gi
 
 export function stripFeedbackLogInternalMarkers(text) {
   if (text == null || text === '') return ''
   return String(text)
     .replace(USER_ID_MARKER_RE, '')
+    .replace(DEPT_NAME_MARKER_RE, '')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\s+([，,。；;])/g, '$1')
     .trim()

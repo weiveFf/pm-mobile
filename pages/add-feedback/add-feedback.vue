@@ -53,6 +53,7 @@
                 v-model="form.deptId"
                 :depts="handlerDeptFlat"
                 :disabled="isDeptLocked"
+                :default-expanded-dept-ids="techDeptDefaultExpandedIds"
                 :before-select="beforeDeptSelect"
                 @change="onDept"
               />
@@ -96,8 +97,8 @@
           <text class="card-foot">被投诉部门与被投诉人至少填一项</text>
         </view>
 
-        <!-- 售后：扩展字段 -->
-        <view v-if="form.abnormalType === '售后'" class="pm-card form-card">
+        <!-- 售后：扩展字段（销售预审路径首次提交可不填，完善时再填） -->
+        <view v-if="form.abnormalType === '售后' && !needsSalesTechAudit" class="pm-card form-card">
           <text class="card-title">售后信息</text>
           <view class="field-stack">
             <view v-for="f in visibleExtFields" :key="f.prop" class="field">
@@ -193,7 +194,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { listDept, listUser } from '@/api/system.js'
-import { addProductFeedbackList } from '@/api/after-sales.js'
+import { addProductFeedbackList, getSalesTechCreatePolicy } from '@/api/after-sales.js'
 import { abnormalTypes, abnormalToProblems } from '@/constants/afterSales.js'
 import {
   afterSalesExtFields,
@@ -317,6 +318,17 @@ const occurrenceEndDate = ref('')
 const occurrenceEndTime = ref('23:59')
 
 const QUALITY_DEPT_NAME = '品质部'
+const SALES_TECH_ABNORMAL_TYPES = new Set(['安装', '售后', '客诉'])
+const salesTechPolicy = ref({ requiresTechAudit: false, techServiceDeptId: 288 })
+
+const needsSalesTechAudit = computed(() => {
+  return (
+    salesTechPolicy.value.requiresTechAudit &&
+    SALES_TECH_ABNORMAL_TYPES.has(String(form.abnormalType || '').trim())
+  )
+})
+
+const techServiceDeptId = computed(() => Number(salesTechPolicy.value.techServiceDeptId || 288))
 
 const today = (() => {
   const d = new Date()
@@ -339,11 +351,15 @@ const qualityDeptId = computed(() => {
 })
 
 const isDeptLocked = computed(() => {
+  if (needsSalesTechAudit.value) return false
   if (!qualityDeptId.value) return false
   return form.abnormalType === '售后' || form.abnormalType === '客诉'
 })
 
 const deptLockHint = computed(() => {
+  if (needsSalesTechAudit.value) {
+    return '请选择技术服务部或其下属部门（默认展开子部门）'
+  }
   if ((form.abnormalType === '售后' || form.abnormalType === '客诉') && !qualityDeptId.value) {
     return `未找到${QUALITY_DEPT_NAME}，请手动选择`
   }
@@ -423,7 +439,36 @@ function isDeptBlockedByHandlerName(deptId) {
   return names.some((n) => isBlockedHandlerPersonName(n))
 }
 
-const handlerDeptFlat = computed(() => deptFlat.value || [])
+function isUnderTechRoot(dept, rootId) {
+  const id = Number(dept.deptId)
+  const root = Number(rootId)
+  if (!Number.isFinite(id) || id <= 0) return false
+  if (id === root) return true
+  if (Number(dept.parentId) === root) return true
+  const ans = String(dept.ancestors || '')
+    .split(',')
+    .map((s) => Number(String(s).trim()))
+    .filter((n) => n > 0)
+  return ans.includes(root)
+}
+
+const handlerDeptFlat = computed(() => {
+  const rows = deptFlat.value || []
+  if (!needsSalesTechAudit.value) return rows
+  const root = techServiceDeptId.value
+  return rows.filter((d) => isUnderTechRoot(d, root))
+})
+
+const techDeptDefaultExpandedIds = computed(() => {
+  if (!needsSalesTechAudit.value) return []
+  const root = Number(techServiceDeptId.value)
+  const ids = new Set([root])
+  handlerDeptFlat.value.forEach((d) => {
+    const id = Number(d.deptId)
+    if (id > 0) ids.add(id)
+  })
+  return [...ids]
+})
 
 function calcUrgency(dateStr) {
   if (!dateStr) {
@@ -442,6 +487,7 @@ function calcUrgency(dateStr) {
 }
 
 function applyQualityDept() {
+  if (needsSalesTechAudit.value) return
   const id = qualityDeptId.value
   if (!id || !isDeptLocked.value) return
   if (form.deptId !== id) {
@@ -511,13 +557,16 @@ function validateBasic() {
   if (form.abnormalType === '客诉') {
     if (!form.complaintDeptId && !form.complaintUserId) return '请选择被投诉部门或被投诉人'
   }
-  if (form.abnormalType === '售后') {
+  if (form.abnormalType === '售后' && !needsSalesTechAudit.value) {
     form.afterSalesExt.occurrenceTimeRange = [
       occurrenceStartDate.value && occurrenceStartTime.value ? `${occurrenceStartDate.value} ${occurrenceStartTime.value}:00` : '',
       occurrenceEndDate.value && occurrenceEndTime.value ? `${occurrenceEndDate.value} ${occurrenceEndTime.value}:00` : ''
     ]
     const err = validateAfterSalesExt(form.afterSalesExt)
     if (err) return err
+  }
+  if (needsSalesTechAudit.value && !form.deptId) {
+    return '请选择技术服务部或其下属部门'
   }
   return ''
 }
@@ -632,7 +681,7 @@ async function doSubmit() {
       complaintDeptIds: form.abnormalType === '客诉' ? (form.complaintDeptId ? [form.complaintDeptId] : []) : [],
       complaintUserIds: form.abnormalType === '客诉' ? (form.complaintUserId ? [form.complaintUserId] : []) : []
     }
-    if (form.abnormalType === '售后') {
+    if (form.abnormalType === '售后' && !needsSalesTechAudit.value) {
       payload.afterSalesExt = serializeAfterSalesExt(form.afterSalesExt)
     }
     await addProductFeedbackList(payload)
@@ -647,10 +696,16 @@ async function doSubmit() {
 
 async function loadData() {
   try {
-    const [deptRes, userRes] = await Promise.all([
+    const [deptRes, userRes, policyRes] = await Promise.all([
       listDept({ queryDeptAllName: true }),
-      listUser({ pageNum: 1, pageSize: 500 })
+      listUser({ pageNum: 1, pageSize: 500 }),
+      getSalesTechCreatePolicy().catch(() => null)
     ])
+
+    const policyBody = policyRes && (policyRes.data || policyRes)
+    salesTechPolicy.value = policyBody && typeof policyBody === 'object'
+      ? { requiresTechAudit: !!policyBody.requiresTechAudit, techServiceDeptId: policyBody.techServiceDeptId || 288 }
+      : { requiresTechAudit: false, techServiceDeptId: 288 }
 
     const rows = normalizeDeptList(deptRes)
     deptFlat.value = rows

@@ -32,6 +32,20 @@ export function getFeedbackWorkflowStatus(feedback, processList) {
   const fb = feedback || {}
   const complaintAuditStatus = Number(fb.complaintAuditStatus || fb.ComplaintAuditStatus || 0)
   const abnormalType = String(fb.abnormalType || fb.AbnormalType || '').trim()
+  const techAuditStatus = Number(fb.techServiceAuditStatus ?? fb.TechServiceAuditStatus ?? 0)
+  if (fb.isWithdrawn === true || fb.IsWithdrawn === true || fb.is_withdrawn === true) {
+    return FEEDBACK_WORKFLOW_STATUS.WITHDRAWN
+  }
+  if (techAuditStatus === 3) {
+    return FEEDBACK_WORKFLOW_STATUS.SALES_TECH_REJECTED
+  }
+  if (techAuditStatus === 4) {
+    return FEEDBACK_WORKFLOW_STATUS.SALES_TECH_PENDING_SUBDEPT_COMPLETE
+  }
+  if (fb.isClose || fb.IsClose) return FEEDBACK_WORKFLOW_STATUS.COMPLETED
+  if (techAuditStatus === 1) {
+    return FEEDBACK_WORKFLOW_STATUS.SALES_TECH_PENDING_AUDIT
+  }
   if (abnormalType === '客诉' && complaintAuditStatus === 1) {
     return FEEDBACK_WORKFLOW_STATUS.COMPLAINT_PENDING_AUDIT
   }
@@ -42,10 +56,6 @@ export function getFeedbackWorkflowStatus(feedback, processList) {
   if (delayApplyStatus === 1 && !(fb.isClose || fb.IsClose)) {
     return FEEDBACK_WORKFLOW_STATUS.DELAY_PENDING_APPROVAL
   }
-  if (fb.isWithdrawn === true || fb.IsWithdrawn === true || fb.is_withdrawn === true) {
-    return FEEDBACK_WORKFLOW_STATUS.WITHDRAWN
-  }
-  if (fb.isClose || fb.IsClose) return FEEDBACK_WORKFLOW_STATUS.COMPLETED
   const p = pickPrimaryProcess(processList)
   if (!p) return FEEDBACK_WORKFLOW_STATUS.PENDING_RESPONSE
   const responded = p.isResponded === true || p.is_responded === true
@@ -142,8 +152,12 @@ export function resolveFeedbackWorkflowDisplay(rowOrFeedback, processListMaybe) 
   }
 
   if (workflowStatusLabel != null && String(workflowStatusLabel).trim() !== '') {
+    const live = getFeedbackWorkflowDisplayStatus(feedback, processList)
+    if (live.overdueType && !workflowOverdueType) return live
+    if (live.status && workflowStatus && live.status !== workflowStatus) return live
+    if (live.status && live.label && live.label !== workflowStatusLabel) return live
     return {
-      status: workflowStatus != null ? workflowStatus : null,
+      status: workflowStatus != null ? workflowStatus : live.status,
       label: workflowStatusLabel,
       overdueType: workflowOverdueType != null ? workflowOverdueType : null
     }

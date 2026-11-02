@@ -114,6 +114,20 @@
       }
     },
     {
+      "path": "pages/sales-tech-edit/sales-tech-edit",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "销售预审完善"
+      }
+    },
+    {
+      "path": "pages/sales-tech-audit/sales-tech-audit",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "技术服务审核"
+      }
+    },
+    {
       "path": "pages/stats/stats",
       "style": {
         "navigationStyle": "custom",

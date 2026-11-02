@@ -53,7 +53,9 @@ const props = defineProps({
   placeholder: { type: String, default: '请选择' },
   disabled: { type: Boolean, default: false },
   /** 返回 false 时不选中、不关闭面板 */
-  beforeSelect: { type: Function, default: null }
+  beforeSelect: { type: Function, default: null },
+  /** 打开面板时默认展开的 deptId 列表（如技术服务部及其子级） */
+  defaultExpandedDeptIds: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['update:modelValue', 'change'])
 
@@ -124,9 +126,16 @@ const renderNodes = computed(() => {
   return collectMatched(tree.value).map((n) => ({ ...n, level: 0 }))
 })
 
+function applyDefaultExpanded() {
+  ;(props.defaultExpandedDeptIds || []).forEach((id) => {
+    if (id != null && id !== '') expanded.value.add(id)
+  })
+}
+
 function open() {
   if (props.disabled) return
   visible.value = true
+  applyDefaultExpanded()
   // 打开时自动展开选中节点路径
   if (props.modelValue) {
     expandPath(tree.value, props.modelValue)
@@ -179,6 +188,7 @@ watch(
 watch(
   () => props.depts,
   () => {
+    applyDefaultExpanded()
     if (props.modelValue) expandPath(tree.value, props.modelValue)
   },
   { deep: true }
