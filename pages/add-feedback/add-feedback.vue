@@ -97,8 +97,8 @@
           <text class="card-foot">被投诉部门与被投诉人至少填一项</text>
         </view>
 
-        <!-- 售后：扩展字段（销售预审路径首次提交可不填，完善时再填） -->
-        <view v-if="form.abnormalType === '售后' && !needsSalesTechAudit" class="pm-card form-card">
+        <!-- 售后：扩展字段（含销售预审，创建必填；完善阶段可再改） -->
+        <view v-if="form.abnormalType === '售后'" class="pm-card form-card">
           <text class="card-title">售后信息</text>
           <view class="field-stack">
             <view v-for="f in visibleExtFields" :key="f.prop" class="field">
@@ -557,7 +557,7 @@ function validateBasic() {
   if (form.abnormalType === '客诉') {
     if (!form.complaintDeptId && !form.complaintUserId) return '请选择被投诉部门或被投诉人'
   }
-  if (form.abnormalType === '售后' && !needsSalesTechAudit.value) {
+  if (form.abnormalType === '售后') {
     form.afterSalesExt.occurrenceTimeRange = [
       occurrenceStartDate.value && occurrenceStartTime.value ? `${occurrenceStartDate.value} ${occurrenceStartTime.value}:00` : '',
       occurrenceEndDate.value && occurrenceEndTime.value ? `${occurrenceEndDate.value} ${occurrenceEndTime.value}:00` : ''
@@ -681,7 +681,7 @@ async function doSubmit() {
       complaintDeptIds: form.abnormalType === '客诉' ? (form.complaintDeptId ? [form.complaintDeptId] : []) : [],
       complaintUserIds: form.abnormalType === '客诉' ? (form.complaintUserId ? [form.complaintUserId] : []) : []
     }
-    if (form.abnormalType === '售后' && !needsSalesTechAudit.value) {
+    if (form.abnormalType === '售后') {
       payload.afterSalesExt = serializeAfterSalesExt(form.afterSalesExt)
     }
     await addProductFeedbackList(payload)

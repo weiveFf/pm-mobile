@@ -60,6 +60,7 @@
           </svg>
           <text class="wx-txt">{{ wxLoading ? '正在跳转…' : '企业微信登录' }}</text>
         </button>
+        <text class="wecom-tip">若企业微信打开本应用未跳过登录，请退出后重试</text>
       </view>
 
       <view class="bottom">
@@ -465,6 +466,15 @@ async function onLogin() {
   font-size: 28rpx;
   font-weight: 750;
   letter-spacing: 1rpx;
+}
+
+.wecom-tip {
+  display: block;
+  margin-top: 20rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: $pm-muted;
+  text-align: center;
 }
 
 .divider {
